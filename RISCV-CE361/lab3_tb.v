@@ -14,11 +14,24 @@ module tb;
 
     // Clock Period = 10 time units
     always
-        #5 clk = ~clk;
+        #50 clk = ~clk;
+
+
+    always @(posedge clk) begin 
+        $display("%0t PC=%08x IR=%08x halt=%x exit=%x x0=%08x x1=%08x x2=%08x x3=%08x x4=%08x x5=%08x x6=%08x x7=%08x x8=%08x x9=%08x x10=%08x x11=%08x x12=%08x x13=%08x x14=%08x x15=%08x x16=%08x x17=%08x x18=%08x x19=%08x x20=%08x x21=%08x x22=%08x x23=%08x x24=%08x x25=%08x x26=%08x x27=%08x x28=%08x x29=%08x x30=%08x x31=%08x", 
+                 $time, CPU.PC, CPU.InstWord, halt, exit,
+                 CPU.RF.Mem[0], CPU.RF.Mem[1], CPU.RF.Mem[2], CPU.RF.Mem[3], CPU.RF.Mem[4], CPU.RF.Mem[5], CPU.RF.Mem[6], CPU.RF.Mem[7], CPU.RF.Mem[8], CPU.RF.Mem[9],
+                 CPU.RF.Mem[10], CPU.RF.Mem[11], CPU.RF.Mem[12], CPU.RF.Mem[13], CPU.RF.Mem[14], CPU.RF.Mem[15], CPU.RF.Mem[16], CPU.RF.Mem[17], CPU.RF.Mem[18], CPU.RF.Mem[19],
+                 CPU.RF.Mem[20], CPU.RF.Mem[21], CPU.RF.Mem[22], CPU.RF.Mem[23], CPU.RF.Mem[24], CPU.RF.Mem[25], CPU.RF.Mem[26], CPU.RF.Mem[27], CPU.RF.Mem[28], CPU.RF.Mem[29],
+                 CPU.RF.Mem[30], CPU.RF.Mem[31]);
+ 
+        #1000;   
 
     always @(negedge clk)
         if (halt)
             exit = 1;
+
+    
 
     initial begin
 
@@ -49,8 +62,9 @@ module tb;
         $dumpfile(signal_dump_fname);
         $dumpvars();
 
-        // Feel free to modify to inspect whatever you want
-        #0 $monitor($time,, "PC=%08x IR=%08x halt=%x exit=%x", CPU.PC, CPU.InstWord, halt, exit);
+        // #0 $monitor($time,, "PC=%08x IR=%08x halt=%x exit=%x x1=%08x x2=%08x x3=%08x x4=%08x",
+        //             CPU.PC, CPU.InstWord, halt, exit,
+        //             CPU.RF.Mem[1], CPU.RF.Mem[2], CPU.RF.Mem[3], CPU.RF.Mem[4]);
 
         // Exit???
         wait(exit);
