@@ -9,6 +9,10 @@
 `define OPCODE_BRANCH     7'b1100011
 `define OPCODE_LOAD       7'b0000011
 `define OPCODE_STORE      7'b0100011 
+`define OPCODE_JAL      7'b1101111
+`define OPCODE_JALR      7'b1100111
+`define OPCODE_LUI      7'b0110111
+`define OPCODE_AUIPC      7'b0010111
 `define FUNC_ADD      3'b000
 `define AUX_FUNC_ADD  7'b0000000
 `define AUX_FUNC_SUB  7'b0100000
@@ -21,6 +25,10 @@
 `define IOPCODE_i 7'b0010011
 `define IOPCODE_ld 7'b0000011
 `define SOPCODE 7'b0100011
+
+
+
+
 
 module SingleCycleCPU(halt, clk, rst);
    output halt;
@@ -46,10 +54,25 @@ module SingleCycleCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] R_OUT; //out from R execution unit
 
    wire invalid_op;
+   wire invalid_rtype= (opcode == `ROPCODE) && 
+   !((( func == 3'b000 && auxFunc == 7'b0000000)  //add
+                || (func == 3'b000 && auxFunc == 7'b0100000)  //sub
+                || (func == 3'b001 && auxFunc == 7'b0000000)  //sll
+                || (func == 3'b010 && auxFunc == 7'b0000000)  //slt
+                || (func == 3'b011 && auxFunc == 7'b0000000) //sltu
+                || (func == 3'b100 && auxFunc == 7'b0000000) //xor
+                || (func == 3'b101 && auxFunc == 7'b0000000) // srl
+                || (func == 3'b101 && auxFunc == 7'b0100000) //sra
+                || (func == 3'b110 && auxFunc == 7'b0000000) //or
+                || (func == 3'b111 && auxFunc == 7'b0000000) //and
+   ))
+   wire invalid_itype=
+
    
    // Only support R-TYPE ADD and SUB
    assign halt = invalid_op;
-   //assign invalid_op = 
+   assign invalid_op = !(opcode == `OPCODE_COMPUTE || opcode == `OPCODE_BRANCH || opcode == `OPCODE_STORE || opcode == `OPCODE_LOAD 
+   || opcode == `OPCODE_JAL || opcode == `OPCODE_JALR || opcode == `OPCODE_LUI || opcode == `OPCODE_AUIPC);
      
    // System State 
    Mem   MEM(.InstAddr(PC), .InstOut(InstWord), 
@@ -69,8 +92,10 @@ module SingleCycleCPU(halt, clk, rst);
    assign funct3 = InstWord[14:12];  // R-Type, I-Type, S-Type
    assign funct7 = InstWord[31:25];  // R-Type
 
+
+
    // Hardwired to support R-Type instructions -- please add muxes and other control signals (RWrdata is the data writted to reg file)
-   R_ExecutionUnit R_EU(.out(R_OUT), .opA(Rdata1), .opB(Rdata2), .func(funct3), .auxFunc(funct7));
+   R_ExecutionUnit R_EU(.out(R_OUT), .opA(Rdata1), .opB(Rdata2), .func(funct3), .auxFunc(funct7), .opcode(opcode));
 
    I_ExecutionUnit I_EU(.out(I_OUT), .opA(Rdata1), .imm12(InstWord[31:20]), .func(funct3), .opcode(opcode) );
 
@@ -97,7 +122,7 @@ module SingleCycleCPU(halt, clk, rst);
 
    //for R type and Load writing to out to  register      
    assign MemWrEn = (opcode == `SOPCODE); // Change this to allow stores
-   assign RWrEn = ( (opcode == `ROPCODE) || (opcode == `IOPCODE_ld) );  // only write to reg file if R or L type instruction 
+   assign RWrEn = ( (opcode == `ROPCODE) || (opcode == `IOPCODE_ld) || (opcode == `IOPCODE_i) );  // only write to reg file if R or L type instruction 
 
    assign RWrdata = 
       (opcode == `ROPCODE) ? R_OUT :
@@ -106,7 +131,8 @@ module SingleCycleCPU(halt, clk, rst);
       (opcode == `IOPCODE_ld && funct3 == 3'b010) ? DataWord                              : // LW
       (opcode == `IOPCODE_ld && funct3 == 3'b100) ? {24'b0,  DataWord[7:0]}               : // LBU
       (opcode == `IOPCODE_ld && funct3 == 3'b101) ? {16'b0,  DataWord[15:0]}              : // LHU
-      32'bz;
+      (opcode == `IOPCODE_i)                      ? I_OUT                                 :             
+      32'b1010101010;
 
 
    // Fetch Address Datapath
@@ -137,17 +163,23 @@ module R_ExecutionUnit(out, opA, opB, func, auxFunc, opcode);
    // assign addSub = (auxFunc == 7'b0100000) ? (opA - opB) : (opA + opB);
    // assign out = (func == 3'b000) ? addSub : 32'hXXXXXXXX;
 
-   assign out = (opcode == `ROPCODE && func == 3'b000 && auxFunc == 7'b0000000) ? opA + opB  :  //add
+   assign out = 
+   
+   
+   
+   (opcode == `ROPCODE && func == 3'b000 && auxFunc == 7'b0000000) ? opA + opB  :  //add
                 (opcode == `ROPCODE && func == 3'b000 && auxFunc == 7'b0100000) ? opA - opB  :  //sub
                 (opcode == `ROPCODE && func == 3'b001 && auxFunc == 7'b0000000) ? opA << (opB & 5'b11111) :  //sll
                 (opcode == `ROPCODE && func == 3'b010 && auxFunc == 7'b0000000) ? $signed(opA) < $signed(opB) : //slt
                 (opcode == `ROPCODE && func == 3'b011 && auxFunc == 7'b0000000) ? $unsigned(opA) < $unsigned(opB) : //sltu
                 (opcode == `ROPCODE && func == 3'b100 && auxFunc == 7'b0000000) ? opA ^ opB : //xor
+                (opcode == `ROPCODE && func == 3'b101 && auxFunc == 7'b0000000) ? opA >> (opB & 5'b11111) :  // srl
                 (opcode == `ROPCODE && func == 3'b101 && auxFunc == 7'b0100000) ? $signed(opA) >>> (opB & 5'b11111) :  //sra
                 (opcode == `ROPCODE && func == 3'b110 && auxFunc == 7'b0000000) ? opA | opB :
                 (opcode == `ROPCODE && func == 3'b111 && auxFunc == 7'b0000000) ? opA & opB :
-                32'bz;
-                
+                32'b10101001010;
+
+
 
    
 endmodule // R_ExecutionUnit
@@ -175,7 +207,7 @@ assign out =
     (opcode == `IOPCODE_i && func == 3'b101 && imm12[11:5] == 7'b0000000) ? (opA >> imm12[4:0]) :  // SRLI
     (opcode == `IOPCODE_i && func == 3'b101 && imm12[11:5] == 7'b0100000) ? ($signed(opA) >>> imm12[4:0]) : // SRAI
 
-    (opcode == `IOPCODE_ld && (func == 3'b000 || func == 3'b001 || func == 3'b010) ) ? opA + {{20{imm12[11]}}, imm12} :
+    (opcode == `IOPCODE_ld && (func == 3'b000 || func == 3'b001 || func == 3'b010) ) ? opA + {{20{imm12[11]}}, imm12} : 
     32'bz;
 
 
