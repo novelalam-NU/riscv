@@ -1,0 +1,190 @@
+// Template for Northwestern - CompEng 361 - Lab4 
+// Groupname:
+// NetIDs:
+
+// Some useful defines...please add your own
+`define WORD_WIDTH 32
+`define NUM_REGS 32
+`define OPCODE_COMPUTE    7'b0110011
+`define OPCODE_BRANCH     7'b1100011
+`define OPCODE_LOAD       7'b0000011
+`define OPCODE_STORE      7'b0100011 
+`define FUNC_ADD      3'b000
+`define AUX_FUNC_ADD  7'b0000000
+`define AUX_FUNC_SUB  7'b0100000
+`define SIZE_BYTE  2'b00
+`define SIZE_HWORD 2'b01
+`define SIZE_WORD  2'b10
+
+module PipelinedCPU(halt, clk, rst);
+   output halt;
+   input clk, rst;
+
+   wire [`WORD_WIDTH-1:0] PC, InstWord;
+   wire [`WORD_WIDTH-1:0] DataAddr, StoreData, DataWord;
+   wire [1:0]  MemSize;
+   wire        MemWrEn;
+   
+   wire [4:0]  Rsrc1, Rsrc2, Rdst;
+   wire [`WORD_WIDTH-1:0] Rdata1, Rdata2, RWrdata;
+   wire        RWrEn;
+
+   wire [`WORD_WIDTH-1:0] NPC, PC_Plus_4;
+   wire [6:0]  opcode;
+
+   wire [6:0]  funct7;
+   wire [2:0]  funct3;
+
+   //IF-ID Pipeline Reg
+
+   wire [`WORD_WIDTH-1:0] IF_ID_PC;
+   wire [`WORD_WIDTH-1:0] IF_ID_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] IF_ID_InstWord;
+
+   //ID Stage
+   wire ID_RWrEn;
+   //ID-EX Pipeline Reg
+   wire [`WORD_WIDTH-1:0] ID_EX_PC;
+   wire [`WORD_WIDTH-1:0] ID_EX_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] ID_EX_Rdata1;
+   wire [`WORD_WIDTH-1:0] ID_EX_Rdata2;
+   wire [4:0] ID_EX_Rsrc1;
+   wire [4:0] ID_EX_Rsrc2;
+   wire [4:0] ID_EX_Rdst;
+   wire [2:0] ID_EX_funct3;
+   wire [6:0] ID_EX_funct7;
+
+   wire ID_EX_RWrEn;
+   wire [31:0] ID_EX_DECODED_In; 
+   wire [31:0] ID_EX_DECODED_Out;
+
+   //EX-MEM Pipeline Reg
+   wire [31:0] EX_MEM_ALU_Out;
+   wire [4:0]  EX_MEM_Rdst;
+   wire        EX_MEM_RWrEn;
+
+   wire [31:0] EX_MEM_data_in;
+   wire [31:0] EX_MEM_data_out;
+
+   wire [`WORD_WIDTH-1:0] ALU_Out;
+   wire invalid_op;
+   
+   // MEM-WB Pipeline Reg
+   wire [31:0] MEM_WB_ALU_Out;
+   wire [4:0]  MEM_WB_Rdst;
+   wire        MEM_WB_RWrEn;
+
+   wire [31:0] MEM_WB_data_in;
+   wire [31:0] MEM_WB_data_out;
+
+   // Only support R-TYPE ADD and SUB
+   assign halt = invalid_op;
+   assign invalid_op = !((opcode == `OPCODE_COMPUTE) && (funct3 == `FUNC_ADD) &&
+		      ((funct7 == `AUX_FUNC_ADD) || (funct7 == `AUX_FUNC_SUB)));
+     
+   // System State 
+   Mem   MEM(.InstAddr(PC), .InstOut(InstWord), 
+            .DataAddr(DataAddr), .DataSize(MemSize), .DataIn(StoreData), .DataOut(DataWord), .WE(MemWrEn), .CLK(clk));
+
+   RegFile RF(.AddrA(Rsrc1), .DataOutA(Rdata1), 
+	      .AddrB(Rsrc2), .DataOutB(Rdata2), 
+	      .AddrW(MEM_WB_Rdst), .DataInW(MEM_WB_ALU_Out), .WenW(MEM_WB_RWrEn), .CLK(clk));
+
+   Reg PC_REG(.Din(NPC), .Qout(PC), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   // Instruction Decode
+   assign opcode = IF_ID_InstWord[6:0];   
+   assign Rdst = IF_ID_InstWord[11:7]; 
+   assign Rsrc1 = IF_ID_InstWord[19:15]; 
+   assign Rsrc2 = IF_ID_InstWord[24:20];
+   assign funct3 = IF_ID_InstWord[14:12];  // R-Type, I-Type, S-Type
+   assign funct7 = IF_ID_InstWord[31:25];  // R-Type
+
+   assign MemWrEn = 1'b0; // Change this to allow stores
+   assign RWrEn = MEM_WB_RWrEn;  // At the moment every instruction will write to the register file
+   assign RWrdata = MEM_WB_ALU_Out;
+
+   assign MemSize= `SIZE_WORD;
+   assign DataAddr = 32'b0;
+   assign StoreData = 32'b0;
+
+   // Hardwired to support R-Type instructions -- please add muxes and other control signals
+   ExecutionUnit EU(.out(ALU_Out), .opA(ID_EX_Rdata1), .opB(ID_EX_Rdata2), .func(ID_EX_funct3), .auxFunc(ID_EX_funct7));
+
+   // Fetch Address Datapath
+   assign PC_Plus_4 = PC + 4;
+   assign NPC = PC_Plus_4;
+
+   //IF-ID Pipeline Reg
+   
+   Reg IF_ID_PC_REG     (.Din(PC),        .Qout(IF_ID_PC),         .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg IF_ID_PC4_REG    (.Din(PC_Plus_4), .Qout(IF_ID_PC_Plus_4),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg IF_ID_INST_REG   (.Din(InstWord),  .Qout(IF_ID_InstWord),   .WE(1'b1), .CLK(clk), .RST(rst));
+
+   //ID Stage
+   assign ID_RWrEn = !invalid_op;
+   assign ID_EX_DECODED_In = {6'b0, ID_RWrEn, funct7, funct3, Rdst, Rsrc2, Rsrc1};
+   //ID-EX Pipeline Reg
+
+   Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_PC4_REG     (.Din(IF_ID_PC_Plus_4), .Qout(ID_EX_PC_Plus_4), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   Reg ID_EX_R1_REG      (.Din(Rdata1),          .Qout(ID_EX_Rdata1),    .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_R2_REG      (.Din(Rdata2),          .Qout(ID_EX_Rdata2),    .WE(1'b1), .CLK(clk), .RST(rst));
+   
+
+   Reg ID_EX_DATA_REG  (.Din(ID_EX_DECODED_In),  .Qout(ID_EX_DECODED_Out), .WE(1'b1), .CLK(clk), .RST(rst));
+   
+
+   assign ID_EX_Rsrc1   = ID_EX_DECODED_Out[4:0];
+   assign ID_EX_Rsrc2   = ID_EX_DECODED_Out[9:5];
+   assign ID_EX_Rdst    = ID_EX_DECODED_Out[14:10];
+   assign ID_EX_funct3  = ID_EX_DECODED_Out[17:15];
+   assign ID_EX_funct7  = ID_EX_DECODED_Out[24:18];
+   assign ID_EX_RWrEn = ID_EX_DECODED_Out[25];
+   //EX-MEM Pipeline Reg
+   Reg EX_MEM_ALU (.Din(ALU_Out), .Qout(EX_MEM_ALU_Out), .WE(1'b1), .CLK(clk), .RST(rst));
+   assign EX_MEM_data_in = {26'b0, ID_EX_Rdst, ID_EX_RWrEn}; // [5:1]=rd, [0]=regwrite
+
+   Reg EX_MEM_data(.Din(EX_MEM_data_in), .Qout(EX_MEM_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   assign EX_MEM_Rdst    = EX_MEM_data_out[5:1];
+   assign EX_MEM_RWrEn = EX_MEM_data_out[0];
+   //MEM-WB Pipeline Reg
+   Reg MEM_WB_ALU (.Din(EX_MEM_ALU_Out), .Qout(MEM_WB_ALU_Out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   assign MEM_WB_data_in = {26'b0, EX_MEM_Rdst, EX_MEM_RWrEn};
+   Reg MEM_WB_data (.Din(MEM_WB_data_in), .Qout(MEM_WB_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   assign MEM_WB_Rdst  = MEM_WB_data_out[5:1];
+   assign MEM_WB_RWrEn = MEM_WB_data_out[0] && (MEM_WB_Rdst != 5'd0);
+
+
+endmodule // PipelinedCPU
+
+// Incomplete version of Lab2 execution unit
+// You will need to extend it. Feel free to modify the interface also
+module ExecutionUnit(out, opA, opB, func, auxFunc);
+   output [`WORD_WIDTH-1:0] out;
+   input [`WORD_WIDTH-1:0]  opA, opB;
+   input [2:0] 	 func;
+   input [6:0] 	 auxFunc;
+
+   wire [`WORD_WIDTH-1:0] 	 addSub;
+
+   wire [4:0] sh = opB[4:0];
+   wire [31:0] srl_val = opA >> sh; // SRL
+   wire [31:0] sra_mask = {32{opA[31]}} & ~(32'hFFFF_FFFF >> sh);
+   wire [31:0] sra_val = srl_val | sra_mask; // SRA result(mask with MSB)
+   assign out = (func==3'b000 && auxFunc==7'b0000000) ? (opA + opB)://add
+   (func==3'b000 && auxFunc==7'b0100000) ? (opA-opB)://sub
+   (func==3'b001 && auxFunc==7'b0000000) ? (opA<<opB[4:0])://SLL
+   (func==3'b010 && auxFunc==7'b0000000) ? ($signed(opA) < $signed(opB) ? 32'd1 : 32'd0)://SLT
+   (func==3'b011 && auxFunc==7'b0000000) ? (opA < opB ? 32'd1 : 32'd0)://SLTU
+   (func==3'b100 && auxFunc==7'b0000000) ? (opA ^ opB)://XOR 
+   (func==3'b101 && auxFunc==7'b0000000) ? (opA >> opB[4:0])://SRL
+   (func==3'b101 && auxFunc==7'b0100000) ? sra_val ://SRA
+   (func==3'b110 && auxFunc==7'b0000000) ? (opA | opB)://OR
+   (func==3'b111 && auxFunc==7'b0000000) ? (opA & opB)://AND
+   32'b0;
+endmodule // ExecutionUnit
