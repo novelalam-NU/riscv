@@ -1,0 +1,87 @@
+module ExecutionUnit(EXout, NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU);
+   output [`WORD_WIDTH-1:0] EXout;
+   output [`WORD_WIDTH-1:0] NPC;
+   input [`WORD_WIDTH-1:0]  opA, opB;
+   
+   input [5:0] 	 microop;
+   input [`WORD_WIDTH-1:0] PC;
+   input [`WORD_WIDTH-1:0] PC_Plus_4;
+   
+   input [`WORD_WIDTH-1:0] immB; 
+   input [`WORD_WIDTH-1:0] immJ;
+   input [`WORD_WIDTH-1:0] immJR; 
+   input [`WORD_WIDTH-1:0] immI;
+   input [`WORD_WIDTH-1:0] immU;
+
+   wire [11:0] imm12 = immI[11:0];
+
+   wire signed [63:0]signed_a = $signed({{32{opA[31]}}, opA});
+   wire signed [63:0]unsigned_b = $signed({32'b0, opB});
+   wire signed [63:0] mult_signed   = $signed(opA) * $signed(opB);
+   wire [63:0] mult_signed_u = signed_a * unsigned_b;
+   wire [63:0] mult_unsigned = $unsigned(opA) * $unsigned(opB);
+   
+
+   wire [`WORD_WIDTH-1:0] 	 addSub;
+
+   wire [4:0] sh = opB[4:0];
+   wire [31:0] srl_val = opA >> sh; // SRL
+   wire [31:0] sra_mask = {32{opA[31]}} & ~(32'hFFFF_FFFF >> sh);
+   wire [31:0] sra_val = srl_val | sra_mask; // SRA result(mask with MSB)
+   assign EXout = (microop==6'd0) ? (opA + opB)://add
+   (microop==6'd1) ? (opA-opB)://sub
+   (microop==6'd2) ? (opA ^ opB)://XOR
+   (microop==6'd3) ? (opA | opB)://OR
+   (microop==6'd4) ? (opA & opB)://AND
+   (microop==6'd5) ? (opA<<opB[4:0])://SLL
+   
+   (microop==6'd6) ? (opA >> opB[4:0])://SRL
+   (microop==6'd7) ? sra_val ://SRA
+
+   (microop==6'd8) ? ($signed(opA) < $signed(opB) ? 32'd1 : 32'd0)://SLT
+   (microop==6'd9) ? (opA < opB ? 32'd1 : 32'd0)://SLTU
+   (microop==6'd10) ? (opA + immI) ://ADDI
+   (microop==6'd11) ? (opA ^ immI) :         // XORI
+   (microop==6'd12) ? (opA | immI) :         // ORI
+   (microop==6'd13) ? (opA & immI) :         // ANDI
+   (microop==6'd14) ? (opA << immI[4:0]) :                      // SLLI
+   (microop==6'd15) ? (opA >> immI[4:0]) :  // SRLI
+   (microop==6'd16) ? ($signed(opA) >>> immI[4:0]) : // SRAI
+   (microop==6'd17) ? ($signed(opA) < $signed(immI)?32'd1:32'd0) : // SLTI
+   (microop==6'd18) ? ($unsigned(opA) < $unsigned(immI)?32'd1:32'd0) : // SLTIU
+   (microop==6'd19) ? (opA+immI)  : // LB
+   (microop==6'd20) ? (opA+immI) : // LH
+   (microop==6'd21) ? (opA+immI) : // LW
+   (microop==6'd22) ? (opA+immI)               : // LBU
+   (microop==6'd23) ? (opA+immI)              : // LHU
+   (microop==6'd24||microop==6'd25||microop==6'd26) ? opA + immI ://SB,SH,SW
+   (microop==6'd33) ? PC_Plus_4://JAL
+   (microop==6'd34) ? PC_Plus_4://JALR
+   (microop==6'd35) ? immU://LUI
+   (microop==6'd36) ? (PC+immU)://AUIPC
+   (microop==6'd37) ? mult_signed[31:0] ://mul
+   (microop==6'd38) ? mult_signed[63:32] : //mulh
+   (microop==6'd39) ? mult_signed_u[63:32] : //mulhsu
+   (microop==6'd40) ? mult_unsigned[63:32] : //mulhu
+   (microop==6'd41) ? div_signed : // div
+   (microop==6'd42) ? ($unsigned(opA) / $unsigned(opB)) : // divu
+   (microop==6'd43) ? rem_signed : // rem
+   (microop==6'd44) ? ($unsigned(opA) % $unsigned(opB)) : // remu
+
+   
+   32'b0;
+   assign NPC = (microop==6'd27 && (opA==opB)) ?  PC+immB://BEQ
+   (microop==6'd28 && (opA != opB)) ? PC+immB://BNE
+   (microop==6'd29 && ($signed(opA) <  $signed(opB))) ? (PC+immB)://BLT
+   (microop==6'd30 && ($signed(opA) >=  $signed(opB))) ? (PC+immB)://BGE
+   (microop==6'd31 && ($unsigned(opA) <  $unsigned(opB))) ? (PC+immB)://BLTU
+   (microop==6'd32 && ($unsigned(opA) >=  $unsigned(opB))) ? (PC+immB)://BGEU
+   (microop==6'd33) ? (PC+immJ)://JAL
+   (microop==6'd34) ? (opA+immJR)://JALR
+
+   PC_Plus_4;
+
+
+   
+
+endmodule // ExecutionUnit
