@@ -1,0 +1,69 @@
+ExecutionUnit inputs (ID → EX)
+Operands / PC
+
+opA (32-bit)
+Source: rs1 register value.
+Extension: none.
+
+opB (32-bit)
+Source: rs2 register value (in your design you do not pack immediates into opB).
+Extension: none.
+
+PC (32-bit)
+Source: current instruction PC.
+Extension: none.
+
+PC_Plus_4 (32-bit)
+Source: PC + 4 computed in ID/IF.
+Extension: none.
+
+Control
+
+microop (6-bit)
+Source: decoder output selecting the operation.
+Extension: none.
+
+Immediate values (all delivered as 32-bit to EX)
+I-type immediate
+
+immI (32-bit)
+Encoding: instr[31:20] (12-bit).
+ID action: sign-extend to 32-bit.
+Example: immI = {{20{instr[31]}}, instr[31:20]}
+Note: shift-immediates use only immI[4:0] as shamt.
+
+Branch immediate
+
+immB (32-bit)
+Encoding (13-bit with LSB 0): {instr[31], instr[7], instr[30:25], instr[11:8], 1'b0}
+ID action: sign-extend to 32-bit.
+Example:
+
+immB_raw = {instr[31], instr[7], instr[30:25], instr[11:8], 1'b0}
+
+immB = {{19{immB_raw[12]}}, immB_raw}
+
+JAL immediate
+
+immJ (32-bit)
+Encoding (21-bit with LSB 0): {instr[31], instr[19:12], instr[20], instr[30:21], 1'b0}
+ID action: sign-extend to 32-bit.
+Example:
+
+immJ_raw = {instr[31], instr[19:12], instr[20], instr[30:21], 1'b0}
+
+immJ = {{11{immJ_raw[20]}}, immJ_raw}
+
+JALR immediate
+
+immJR (32-bit)
+JALR uses an I-type immediate.
+ID action: sign-extend to 32-bit (same rule as immI).
+Practical: you can simply set immJR = immI.
+
+U-type immediate (LUI/AUIPC)
+
+immU (32-bit)
+Encoding: instr[31:12] placed into upper bits, low 12 bits zero.
+ID action: no sign/zero “extend” needed; it’s bit placement:
+Example: immU = {instr[31:12], 12'b0}
