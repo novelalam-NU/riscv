@@ -380,10 +380,7 @@ module PipelinedCPU(halt, clk, rst);
       `MICROOP_INVALID;
 
    // hazard / valid logic (simple)
-   wire invalid_op;
-   assign invalid_op = !((opcode == `OPCODE_COMPUTE) && (funct3 == `FUNC_ADD) &&
-            ((funct7 == `AUX_FUNC_ADD) || (funct7 == `AUX_FUNC_SUB)));
-   assign halt = invalid_op;
+   assign halt = (microop == `MICROOP_INVALID);
 
    // control signals from microop
    assign MemSize = ((microop == `MICROOP_LB) || (microop == `MICROOP_LBU)) ? `SIZE_BYTE :
@@ -416,7 +413,7 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] ID_EX_immI;
    wire [`WORD_WIDTH-1:0] ID_EX_immU;
 
-   Reg ID_EX_INSTR_CODE  (.Din(microop),   .Qout(ID_EX_microop),   .WR(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_INSTR_CODE  (.Din(microop),   .Qout(ID_EX_microop),   .WE(1'b1), .CLK(clk), .RST(rst));
    Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(1'b1), .CLK(clk), .RST(rst));
    Reg ID_EX_PC4_REG     (.Din(IF_ID_PC_Plus_4), .Qout(ID_EX_PC_Plus_4), .WE(1'b1), .CLK(clk), .RST(rst));
 
