@@ -324,7 +324,7 @@ module PipelinedCPU(halt, clk, rst);
       .InstAddr(PC), 
       .InstOut(InstWord), 
       .DataAddr(DataAddr), 
-      .DataSize(MemSize), 
+      .DataSize(ID_MemSize), 
       .DataIn(StoreData), 
       .DataOut(DataWord), 
       .WE(MemWrEn), 
@@ -435,11 +435,11 @@ module PipelinedCPU(halt, clk, rst);
    assign halt = (microop == `MICROOP_INVALID);
 
    // control signals from microop
-   assign MemSize = ((microop == `MICROOP_LB) || (microop == `MICROOP_LBU)) ? `SIZE_BYTE :
+   assign ID_MemSize = ((microop == `MICROOP_LB) || (microop == `MICROOP_LBU)) ? `SIZE_BYTE :
                     ((microop == `MICROOP_LH) || (microop == `MICROOP_LHU)) ? `SIZE_HWORD :
                     `SIZE_WORD;
    
-   assign MemWrEn = (microop == `MICROOP_SB) || (microop == `MICROOP_SH) || (microop == `MICROOP_SW);
+   assign ID_MemWrEn = (microop == `MICROOP_SB) || (microop == `MICROOP_SH) || (microop == `MICROOP_SW);
    
    assign ID_RWrEn = !((microop == `MICROOP_SB) || (microop == `MICROOP_SH) || (microop == `MICROOP_SW) ||
                         (microop == `MICROOP_BEQ) || (microop == `MICROOP_BNE) || (microop == `MICROOP_BLT) ||
