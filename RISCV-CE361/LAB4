@@ -264,7 +264,7 @@ module PipelinedCPU(halt, clk, rst);
 
    // Next PC Logic (now hardwired sequential, branch mux usuall go here)
    assign PC_Plus_4 = PC + 4;
-   assign NPC = PC_Plus_4;
+   assign NPC = EX_NPC;
 
    // --- IF/ID Pipeline Registers (latch from IF to ID) ---
    wire [`WORD_WIDTH-1:0] IF_ID_PC;
@@ -295,6 +295,11 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] immI;
    wire [`WORD_WIDTH-1:0] immU;
 
+   // --- EX Wires ---
+   wire [`WORD_WIDTH-1:0] ALU_Out;
+   wire [`WORD_WIDTH-1:0] EX_MEM_data_in;
+   wire [`WORD_WIDTH-1:0] EX_NPC;
+
    // imm gen (pre-decode from IF_ID_InstWord)
    assign immI = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
 
@@ -317,7 +322,7 @@ module PipelinedCPU(halt, clk, rst);
    assign immJR = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
 
    wire [`WORD_WIDTH-1:0] Rdata1, Rdata2; // read data from regfile
-   wire [6:0] microop;                    // internal tiny opname
+   wire [5:0] microop;                    // internal tiny opname
    wire ID_RWrEn;                         // should write reg? (per inst)
    
    // --- ID Components ---
@@ -401,7 +406,7 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] ID_EX_REG2_DATA;
    wire ID_EX_MemWrEn;
    wire ID_EX_RWrEn;
-   wire [6:0] ID_EX_microop;
+   wire [5:0] ID_EX_microop;
    wire [4:0] ID_EX_Rsrc1;
    wire [4:0] ID_EX_Rsrc2;
    wire [4:0] ID_EX_Rdst;
@@ -440,19 +445,17 @@ module PipelinedCPU(halt, clk, rst);
    // ALU do math and EX/MEM latchy
    ////////////////////////////////////////////////////////////////////////////////
 
-   // --- EX Wires ---
-   wire [`WORD_WIDTH-1:0] ALU_Out;
-   wire [`WORD_WIDTH-1:0] EX_MEM_data_in;
+
 
    // --- EX Components ---
    // now uses ExecutionUnit, opA/opB etc. (I-type/branch mux not fancy here)
    //ExecutionUnit EU(.out(ALU_Out), .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .func(ID_EX_funct3), .auxFunc(ID_EX_funct7));
 
    ExecutionUnit EU (
-      .EXout(ALU_Out), NPC,
+      .EXout(ALU_Out), .EX_NPC(EX_NPC),
       .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .microop(ID_EX_microop),
-      .PC(IF_ID_PC), .PC_Plus_4(IF_ID_PC_Plus_4),
-      .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU);
+      .PC(ID_EX_PC), .PC_Plus_4(ID_EX_PC_Plus_4),
+      .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU));
 
    // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
    wire [`WORD_WIDTH-1:0] EX_MEM_ALU_Out;
@@ -523,9 +526,9 @@ endmodule
 
 
 
-module ExecutionUnit(EXout, NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU);
+module ExecutionUnit(EXout, EX_NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU);
    output [`WORD_WIDTH-1:0] EXout;
-   output [`WORD_WIDTH-1:0] NPC;
+   output [`WORD_WIDTH-1:0] EX_NPC;
    input [`WORD_WIDTH-1:0]  opA, opB;
    
    input [5:0] 	 microop;
@@ -545,6 +548,8 @@ module ExecutionUnit(EXout, NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, im
    wire signed [63:0] mult_signed   = $signed(opA) * $signed(opB);
    wire [63:0] mult_signed_u = signed_a * unsigned_b;
    wire [63:0] mult_unsigned = $unsigned(opA) * $unsigned(opB);
+   wire signed [31:0] div_signed   = $signed(opA) / $signed(opB);
+   wire signed [31:0] rem_signed   = $signed(opA) % $signed(opB);
    
 
    wire [`WORD_WIDTH-1:0] 	 addSub;
@@ -593,7 +598,7 @@ module ExecutionUnit(EXout, NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, im
                   (microop==`MICROOP_REMU) ? ($unsigned(opA) % $unsigned(opB)) : // REMU
                   32'b0;
 
-   assign NPC = (microop==`MICROOP_BEQ && (opA == opB)) ?  (PC + immB) : // BEQ
+   assign EX_NPC = (microop==`MICROOP_BEQ && (opA == opB)) ?  (PC + immB) : // BEQ
                 (microop==`MICROOP_BNE && (opA != opB)) ?  (PC + immB) : // BNE
                 (microop==`MICROOP_BLT && ($signed(opA) < $signed(opB))) ? (PC + immB) : // BLT
                 (microop==`MICROOP_BGE && ($signed(opA) >= $signed(opB))) ? (PC + immB) : // BGE
@@ -603,7 +608,7 @@ module ExecutionUnit(EXout, NPC, opA, opB, microop, PC, PC_Plus_4,immB, immJ, im
                 (microop==`MICROOP_JALR) ? (opA + immJR) : // JALR
                 PC_Plus_4;
 
-   PC_Plus_4;
+
 
 
    
