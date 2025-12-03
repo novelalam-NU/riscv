@@ -1,0 +1,698 @@
+///////////////////////////////////////////////////////////////
+// SECTION 0: GLOBAL DEFINES & CONSTANTS
+///////////////////////////////////////////////////////////////
+// Template for Northwestern - CompEng 361 - Lab4 
+// Groupname:
+// NetIDs:
+
+// Some useful defines...please add your own
+`define WORD_WIDTH 32
+`define NUM_REGS 32
+`define OPCODE_COMPUTE    7'b0110011
+`define OPCODE_BRANCH     7'b1100011
+`define OPCODE_LOAD       7'b0000011
+`define OPCODE_STORE      7'b0100011 
+`define FUNC_ADD      3'b000
+`define AUX_FUNC_ADD  7'b0000000
+`define AUX_FUNC_SUB  7'b0100000
+`define SIZE_BYTE  2'b00
+`define SIZE_HWORD 2'b01
+`define SIZE_WORD  2'b10
+
+// R-type ALU operations (opcode: 0110011)
+`define ADD_OP      7'b0110011
+`define ADD_funct3  3'b000
+`define ADD_funct7  7'b0000000
+
+`define SUB_OP      7'b0110011
+`define SUB_funct3  3'b000
+`define SUB_funct7  7'b0100000
+
+`define XOR_OP      7'b0110011
+`define XOR_funct3  3'b100
+`define XOR_funct7  7'b0000000
+
+`define OR_OP       7'b0110011
+`define OR_funct3   3'b110
+`define OR_funct7   7'b0000000
+
+`define AND_OP      7'b0110011
+`define AND_funct3  3'b111
+`define AND_funct7  7'b0000000
+
+`define SLL_OP      7'b0110011
+`define SLL_funct3  3'b001
+`define SLL_funct7  7'b0000000
+
+`define SRL_OP      7'b0110011
+`define SRL_funct3  3'b101
+`define SRL_funct7  7'b0000000
+
+`define SRA_OP      7'b0110011
+`define SRA_funct3  3'b101
+`define SRA_funct7  7'b0100000
+
+`define SLT_OP      7'b0110011
+`define SLT_funct3  3'b010
+`define SLT_funct7  7'b0000000
+
+`define SLTU_OP     7'b0110011
+`define SLTU_funct3 3'b011
+`define SLTU_funct7 7'b0000000
+
+// I-type immediate operations (opcode: 0010011)
+`define ADDI_OP     7'b0010011
+`define ADDI_funct3 3'b000
+
+`define XORI_OP     7'b0010011
+`define XORI_funct3 3'b100
+
+`define ORI_OP      7'b0010011
+`define ORI_funct3  3'b110
+
+`define ANDI_OP     7'b0010011
+`define ANDI_funct3 3'b111
+
+`define SLLI_OP     7'b0010011
+`define SLLI_funct3 3'b001
+`define SLLI_funct7 7'b0000000
+
+`define SRLI_OP     7'b0010011
+`define SRLI_funct3 3'b101
+`define SRLI_funct7 7'b0000000
+
+`define SRAI_OP     7'b0010011
+`define SRAI_funct3 3'b101
+`define SRAI_funct7 7'b0100000
+
+`define SLTI_OP     7'b0010011
+`define SLTI_funct3 3'b010
+
+`define SLTIU_OP    7'b0010011
+`define SLTIU_funct3 3'b011
+
+// Load instructions (opcode: 0000011)
+`define LB_OP       7'b0000011
+`define LB_funct3   3'b000
+
+`define LH_OP       7'b0000011
+`define LH_funct3   3'b001
+
+`define LW_OP       7'b0000011
+`define LW_funct3   3'b010
+
+`define LBU_OP      7'b0000011
+`define LBU_funct3  3'b100
+
+`define LHU_OP      7'b0000011
+`define LHU_funct3  3'b101
+
+// Store instructions (opcode: 0100011)
+`define SB_OP       7'b0100011
+`define SB_funct3   3'b000
+
+`define SH_OP       7'b0100011
+`define SH_funct3   3'b001
+
+`define SW_OP       7'b0100011
+`define SW_funct3   3'b010
+
+// Branch instructions (opcode: 1100011)
+`define BEQ_OP      7'b1100011
+`define BEQ_funct3  3'b000
+
+`define BNE_OP      7'b1100011
+`define BNE_funct3  3'b001
+
+`define BLT_OP      7'b1100011
+`define BLT_funct3  3'b100
+
+`define BGE_OP      7'b1100011
+`define BGE_funct3  3'b101
+
+`define BLTU_OP     7'b1100011
+`define BLTU_funct3 3'b110
+
+`define BGEU_OP     7'b1100011
+`define BGEU_funct3 3'b111
+
+// Jump instructions
+`define JAL_OP      7'b1101111
+
+`define JALR_OP     7'b1100111
+`define JALR_funct3 3'b000
+
+// Upper immediate instructions
+`define LUI_OP      7'b0110111
+
+`define AUIPC_OP    7'b0010111
+
+// RV32M Multiply Extension (opcode: 0110011)
+`define MUL_OP      7'b0110011
+`define MUL_funct3  3'b000
+`define MUL_funct7  7'b0000001
+
+`define MULH_OP     7'b0110011
+`define MULH_funct3 3'b001
+`define MULH_funct7 7'b0000001
+
+`define MULHSU_OP     7'b0110011
+`define MULHSU_funct3 3'b010
+`define MULHSU_funct7 7'b0000001
+
+`define MULHU_OP     7'b0110011
+`define MULHU_funct3 3'b011
+`define MULHU_funct7 7'b0000001
+
+`define DIV_OP      7'b0110011
+`define DIV_funct3  3'b100
+`define DIV_funct7  7'b0000001
+
+`define DIVU_OP     7'b0110011
+`define DIVU_funct3 3'b101
+`define DIVU_funct7 7'b0000001
+
+`define REM_OP      7'b0110011
+`define REM_funct3  3'b110
+`define REM_funct7  7'b0000001
+
+`define REMU_OP     7'b0110011
+`define REMU_funct3 3'b111
+`define REMU_funct7 7'b0000001
+
+`define MICROOP_ADD     6'd0
+`define MICROOP_SUB     6'd1
+`define MICROOP_XOR     6'd2
+`define MICROOP_OR      6'd3
+`define MICROOP_AND     6'd4
+`define MICROOP_SLL     6'd5
+`define MICROOP_SRL     6'd6
+`define MICROOP_SRA     6'd7
+`define MICROOP_SLT     6'd8
+`define MICROOP_SLTU    6'd9
+`define MICROOP_ADDI    6'd10
+`define MICROOP_XORI    6'd11
+`define MICROOP_ORI     6'd12
+`define MICROOP_ANDI    6'd13
+`define MICROOP_SLLI    6'd14
+`define MICROOP_SRLI    6'd15
+`define MICROOP_SRAI    6'd16
+`define MICROOP_SLTI    6'd17
+`define MICROOP_SLTIU   6'd18
+`define MICROOP_LB      6'd19
+`define MICROOP_LH      6'd20
+`define MICROOP_LW      6'd21
+`define MICROOP_LBU     6'd22
+`define MICROOP_LHU     6'd23
+`define MICROOP_SB      6'd24
+`define MICROOP_SH      6'd25
+`define MICROOP_SW      6'd26
+`define MICROOP_BEQ     6'd27
+`define MICROOP_BNE     6'd28
+`define MICROOP_BLT     6'd29
+`define MICROOP_BGE     6'd30
+`define MICROOP_BLTU    6'd31
+`define MICROOP_BGEU    6'd32
+`define MICROOP_JAL     6'd33
+`define MICROOP_JALR    6'd34
+`define MICROOP_LUI     6'd35
+`define MICROOP_AUIPC   6'd36
+`define MICROOP_MUL     6'd37
+`define MICROOP_MULH    6'd38
+`define MICROOP_MULHSU  6'd39
+`define MICROOP_MULHU   6'd40
+`define MICROOP_DIV     6'd41
+`define MICROOP_DIVU    6'd42
+`define MICROOP_REM     6'd43
+`define MICROOP_REMU    6'd44
+`define MICROOP_INVALID 6'd63
+
+
+
+module PipelinedCPU(halt, clk, rst);
+   output halt;
+   input clk, rst;
+
+   ////////////////////////////////////////////////////////////////////////////////
+   // SECTION 1: INSTRUCTION FETCH (IF)
+   // PC make, instr fetch, and IF/ID pipeline latchy
+   ////////////////////////////////////////////////////////////////////////////////
+   
+   // --- IF Wires ---
+   wire [`WORD_WIDTH-1:0] IF_PC;             // currnt PC pointer
+   wire [`WORD_WIDTH-1:0] IF_NPC;            // next PC to put in reg
+   wire [`WORD_WIDTH-1:0] IF_PC_Plus_4;      // PC + 4 (norm step)
+   wire [`WORD_WIDTH-1:0] IF_InstWord;       // fetched instr bits
+   // --- IF/ID Pipeline Registers (latch from IF to ID) ---
+   wire [`WORD_WIDTH-1:0] IF_ID_PC;
+   wire [`WORD_WIDTH-1:0] IF_ID_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] IF_ID_InstWord;
+
+   // --- ID Wires & Decoding ---
+   wire [6:0]  ID_opcode = IF_ID_InstWord[6:0];   
+   wire [4:0]  ID_Rdst   = IF_ID_InstWord[11:7]; 
+   wire [4:0]  ID_Rsrc1  = IF_ID_InstWord[19:15]; 
+   wire [4:0]  ID_Rsrc2  = IF_ID_InstWord[24:20];
+   
+   wire [2:0]  ID_funct3 = IF_ID_InstWord[14:12];
+   wire [6:0]  ID_funct7 = IF_ID_InstWord[31:25];
+   wire [1:0] ID_MemSize;
+   wire       ID_MemWrEn;
+   wire       ID_RWrEn;
+   
+   wire [`WORD_WIDTH-1:0] ID_Rdata1;
+   wire [`WORD_WIDTH-1:0] ID_Rdata2;
+   // immed wires 
+   wire [`WORD_WIDTH-1:0] ID_immB;
+   wire [`WORD_WIDTH-1:0] ID_immJ;
+   wire [`WORD_WIDTH-1:0] ID_immJR;
+   wire [`WORD_WIDTH-1:0] ID_immI;
+   wire [`WORD_WIDTH-1:0] ID_immU;
+   wire [`WORD_WIDTH-1:0] ID_immS;
+   wire ID_isLoad;
+   wire [5:0] ID_microop;
+ 
+
+   // --- ID/EX Pipeline Registers (latch ID->EX) ---
+   wire [`WORD_WIDTH-1:0] ID_EX_PC;
+   wire [`WORD_WIDTH-1:0] ID_EX_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] ID_EX_REG1_DATA;
+   wire [`WORD_WIDTH-1:0] ID_EX_REG2_DATA;
+   wire ID_EX_MemWrEn;
+   wire ID_EX_RWrEn;
+   wire [5:0] ID_EX_microop;
+   wire [4:0] ID_EX_Rsrc1;
+   wire [4:0] ID_EX_Rsrc2;
+   wire [4:0] ID_EX_Rdst;
+   wire [1:0] ID_EX_MemSize;
+   wire ID_EX_isLoad;
+   
+   // ID/EX pipeline regs for immeds
+   wire [`WORD_WIDTH-1:0] ID_EX_immB;
+   wire [`WORD_WIDTH-1:0] ID_EX_immJ;
+   wire [`WORD_WIDTH-1:0] ID_EX_immJR;
+   wire [`WORD_WIDTH-1:0] ID_EX_immI;
+   wire [`WORD_WIDTH-1:0] ID_EX_immU;
+   wire [`WORD_WIDTH-1:0] ID_EX_immS;
+   // --- EX Wires ---
+   wire [`WORD_WIDTH-1:0] EX_ALU_Out;
+   wire [`WORD_WIDTH-1:0] EX_NPC;
+   
+   wire EX_br_taken;
+
+   // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
+   wire [`WORD_WIDTH-1:0] EX_MEM_ALU_Out;
+
+   wire        EX_MEM_MemWrEn;
+   wire [1:0]  EX_MEM_MemSize;
+
+   wire [31:0] EX_MEM_store_data;
+   wire [31:0] EX_MEM_ctrl_in, EX_MEM_ctrl_out;
+   wire        EX_MEM_memToReg;
+   wire [5:0]  EX_MEM_microop;
+   wire [4:0]  EX_MEM_Rdst;
+   wire EX_MEM_RWrEn;
+   // --- MEM Wires & Logic ---
+   wire [`WORD_WIDTH-1:0] DataAddr;
+   wire [`WORD_WIDTH-1:0] StoreData;
+   wire [`WORD_WIDTH-1:0] MEM_DataWord; // mem read out
+   wire [7:0] MEM_load_byte;
+   wire [15:0] MEM_load_half;
+   wire [31:0] MEM_load_ext;
+
+   // --- MEM/WB Pipeline Registers (latch MEM->WB) ---
+   wire [31:0] MEM_WB_ALU_Out;
+   wire [31:0] MEM_WB_data_in;
+   wire [31:0] MEM_WB_data_out;
+   wire [5:0]  MEM_WB_microop;
+   wire        MEM_WB_memToReg;
+   wire [31:0] MEM_WB_memdata;
+   // --- WB Wires & Logic ---
+   wire [4:0]  MEM_WB_Rdst;
+   wire        MEM_WB_RWrEn;
+   wire [`WORD_WIDTH-1:0] WB_RWrdata;
+
+   // --- IF Components ---
+   
+   // Program Counter Register
+   Reg PC_REG(.Din(IF_NPC), .Qout(IF_PC), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   // Memory Unit (Dual job: get Instr in IF, data read/write in MEM)
+   // note: data ports driven by MEM stage signals later
+   Mem MEM(
+      .InstAddr(IF_PC), 
+      .InstOut(IF_InstWord), 
+      .DataAddr(EX_MEM_ALU_Out), 
+      .DataSize(EX_MEM_MemSize), 
+      .DataIn(EX_MEM_store_data), 
+      .DataOut(MEM_DataWord), 
+      .WE(EX_MEM_MemWrEn), 
+      .CLK(clk)
+   );
+
+   // Next PC Logic (now hardwired sequential, branch mux usuall go here)
+   assign IF_PC_Plus_4 = IF_PC + 4;
+   assign IF_NPC = (EX_br_taken) ? EX_NPC : IF_PC_Plus_4; //output of the ALU
+
+   // --- IF/ID Pipeline Registers (latch from IF to ID) ---
+
+
+   Reg IF_ID_PC_REG     (.Din(IF_PC),        .Qout(IF_ID_PC),         .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg IF_ID_PC4_REG    (.Din(IF_PC_Plus_4), .Qout(IF_ID_PC_Plus_4),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg IF_ID_INST_REG   (.Din(IF_InstWord),  .Qout(IF_ID_InstWord),   .WE(1'b1), .CLK(clk), .RST(rst));
+
+
+   ////////////////////////////////////////////////////////////////////////////////
+   // SECTION 2: INSTRUCTION DECODE (ID)
+   // instr slice, reg read, control bitz, and ID/EX latchy
+   ////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+   // imm gen (pre-decode from IF_ID_InstWord)
+   assign ID_immI = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
+
+   assign ID_immU = {IF_ID_InstWord[31:12], 12'b0};
+
+   assign ID_immB = {{19{IF_ID_InstWord[31]}},
+                  IF_ID_InstWord[31],
+                  IF_ID_InstWord[7],
+                  IF_ID_InstWord[30:25],
+                  IF_ID_InstWord[11:8],
+                  1'b0};
+
+   assign ID_immJ = {{11{IF_ID_InstWord[31]}},
+                  IF_ID_InstWord[31],
+                  IF_ID_InstWord[19:12],
+                  IF_ID_InstWord[20],
+                  IF_ID_InstWord[30:21],
+                  1'b0};
+
+   assign ID_immJR = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
+
+   assign ID_immS = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:25], IF_ID_InstWord[11:7]};
+
+   // --- ID Components ---
+
+   // Register File (reads here, writes from WB stage feedback)
+   // AddrW/DataInW/WenW come from WB (feedback)
+   RegFile RF(
+      .AddrA(ID_Rsrc1), .DataOutA(ID_Rdata1), 
+      .AddrB(ID_Rsrc2), .DataOutB(ID_Rdata2), 
+      .AddrW(MEM_WB_Rdst), .DataInW(WB_RWrdata), .WenW(MEM_WB_RWrEn), .CLK(clk)
+   );
+
+   // Control Logic: map risc-v opcode fields to our microops
+   assign     ID_microop = 
+      (ID_opcode == `ADD_OP && ID_funct3 == `ADD_funct3 && ID_funct7 == `ADD_funct7) ? `MICROOP_ADD :
+      (ID_opcode == `SUB_OP && ID_funct3 == `SUB_funct3 && ID_funct7 == `SUB_funct7) ? `MICROOP_SUB :
+      (ID_opcode == `XOR_OP && ID_funct3 == `XOR_funct3 && ID_funct7 == `XOR_funct7) ? `MICROOP_XOR :
+      (ID_opcode == `OR_OP && ID_funct3 == `OR_funct3 && ID_funct7 == `OR_funct7) ? `MICROOP_OR :
+      (ID_opcode == `AND_OP && ID_funct3 == `AND_funct3 && ID_funct7 == `AND_funct7) ? `MICROOP_AND :
+      (ID_opcode == `SLL_OP && ID_funct3 == `SLL_funct3 && ID_funct7 == `SLL_funct7) ? `MICROOP_SLL :
+      (ID_opcode == `SRL_OP && ID_funct3 == `SRL_funct3 && ID_funct7 == `SRL_funct7) ? `MICROOP_SRL :
+      (ID_opcode == `SRA_OP && ID_funct3 == `SRA_funct3 && ID_funct7 == `SRA_funct7) ? `MICROOP_SRA :
+      (ID_opcode == `SLT_OP && ID_funct3 == `SLT_funct3 && ID_funct7 == `SLT_funct7) ? `MICROOP_SLT :
+      (ID_opcode == `SLTU_OP && ID_funct3 == `SLTU_funct3 && ID_funct7 == `SLTU_funct7) ? `MICROOP_SLTU :
+      (ID_opcode == `ADDI_OP && ID_funct3 == `ADDI_funct3) ? `MICROOP_ADDI :
+      (ID_opcode == `XORI_OP && ID_funct3 == `XORI_funct3) ? `MICROOP_XORI :
+      (ID_opcode == `ORI_OP && ID_funct3 == `ORI_funct3) ? `MICROOP_ORI :
+      (ID_opcode == `ANDI_OP && ID_funct3 == `ANDI_funct3) ? `MICROOP_ANDI :
+      (ID_opcode == `SLLI_OP && ID_funct3 == `SLLI_funct3 && ID_funct7 == `SLLI_funct7) ? `MICROOP_SLLI :
+      (ID_opcode == `SRLI_OP && ID_funct3 == `SRLI_funct3 && ID_funct7 == `SRLI_funct7) ? `MICROOP_SRLI :
+      (ID_opcode == `SRAI_OP && ID_funct3 == `SRAI_funct3 && ID_funct7 == `SRAI_funct7) ? `MICROOP_SRAI :
+      (ID_opcode == `SLTI_OP && ID_funct3 == `SLTI_funct3) ? `MICROOP_SLTI :
+      (ID_opcode == `SLTIU_OP && ID_funct3 == `SLTIU_funct3) ? `MICROOP_SLTIU :
+      (ID_opcode == `LB_OP && ID_funct3 == `LB_funct3) ? `MICROOP_LB :
+      (ID_opcode == `LH_OP && ID_funct3 == `LH_funct3) ? `MICROOP_LH :
+      (ID_opcode == `LW_OP && ID_funct3 == `LW_funct3) ? `MICROOP_LW :
+      (ID_opcode == `LBU_OP && ID_funct3 == `LBU_funct3) ? `MICROOP_LBU :
+      (ID_opcode == `LHU_OP && ID_funct3 == `LHU_funct3) ? `MICROOP_LHU :
+      (ID_opcode == `SB_OP && ID_funct3 == `SB_funct3) ? `MICROOP_SB :
+      (ID_opcode == `SH_OP && ID_funct3 == `SH_funct3) ? `MICROOP_SH :
+      (ID_opcode == `SW_OP && ID_funct3 == `SW_funct3) ? `MICROOP_SW :
+      (ID_opcode == `BEQ_OP && ID_funct3 == `BEQ_funct3) ? `MICROOP_BEQ :
+      (ID_opcode == `BNE_OP && ID_funct3 == `BNE_funct3) ? `MICROOP_BNE :
+      (ID_opcode == `BLT_OP && ID_funct3 == `BLT_funct3) ? `MICROOP_BLT :
+      (ID_opcode == `BGE_OP && ID_funct3 == `BGE_funct3) ? `MICROOP_BGE :
+      (ID_opcode == `BLTU_OP && ID_funct3 == `BLTU_funct3) ? `MICROOP_BLTU :
+      (ID_opcode == `BGEU_OP && ID_funct3 == `BGEU_funct3) ? `MICROOP_BGEU :
+      (ID_opcode == `JAL_OP) ? `MICROOP_JAL :
+      (ID_opcode == `JALR_OP && ID_funct3 == `JALR_funct3) ? `MICROOP_JALR :
+      (ID_opcode == `LUI_OP) ? `MICROOP_LUI :
+      (ID_opcode == `AUIPC_OP) ? `MICROOP_AUIPC :
+      (ID_opcode == `MUL_OP && ID_funct3 == `MUL_funct3 && ID_funct7 == `MUL_funct7) ? `MICROOP_MUL :
+      (ID_opcode == `MULH_OP && ID_funct3 == `MULH_funct3 && ID_funct7 == `MULH_funct7) ? `MICROOP_MULH :
+      (ID_opcode == `MULHSU_OP && ID_funct3 == `MULHSU_funct3 && ID_funct7 == `MULHSU_funct7) ? `MICROOP_MULHSU :
+      (ID_opcode == `MULHU_OP && ID_funct3 == `MULHU_funct3 && ID_funct7 == `MULHU_funct7) ? `MICROOP_MULHU :
+      (ID_opcode == `DIV_OP && ID_funct3 == `DIV_funct3 && ID_funct7 == `DIV_funct7) ? `MICROOP_DIV :
+      (ID_opcode == `DIVU_OP && ID_funct3 == `DIVU_funct3 && ID_funct7 == `DIVU_funct7) ? `MICROOP_DIVU :
+      (ID_opcode == `REM_OP && ID_funct3 == `REM_funct3 && ID_funct7 == `REM_funct7) ? `MICROOP_REM :
+      (ID_opcode == `REMU_OP && ID_funct3 == `REMU_funct3 && ID_funct7 == `REMU_funct7) ? `MICROOP_REMU :
+      `MICROOP_INVALID;
+   assign ID_isLoad =
+      (ID_microop==`MICROOP_LB)  || (ID_microop==`MICROOP_LH)  || (ID_microop==`MICROOP_LW) || (ID_microop==`MICROOP_LBU) || (ID_microop==`MICROOP_LHU);
+
+   // hazard / valid logic (simple)
+   assign halt = (ID_microop == `MICROOP_INVALID);
+
+   // control signals from ID_microop
+   assign ID_MemSize = ((ID_microop == `MICROOP_LB) || (ID_microop == `MICROOP_LBU) ||  (ID_microop == `MICROOP_SB)) ? `SIZE_BYTE :
+                    ((ID_microop == `MICROOP_LH) || (ID_microop == `MICROOP_LHU) || (ID_microop == `MICROOP_SH)) ? `SIZE_HWORD :
+                    `SIZE_WORD;
+   
+   assign ID_MemWrEn = (ID_microop == `MICROOP_SB) || (ID_microop == `MICROOP_SH) || (ID_microop == `MICROOP_SW);
+   
+   assign ID_RWrEn = !((ID_microop == `MICROOP_SB) || (ID_microop == `MICROOP_SH) || (ID_microop == `MICROOP_SW) ||
+                        (ID_microop == `MICROOP_BEQ) || (ID_microop == `MICROOP_BNE) || (ID_microop == `MICROOP_BLT) ||
+                        (ID_microop == `MICROOP_BGE) || (ID_microop == `MICROOP_BLTU) || (ID_microop == `MICROOP_BGEU) ||
+                        (ID_microop == `MICROOP_INVALID));
+
+
+
+   Reg ID_EX_INSTR_CODE  (.Din(ID_microop),   .Qout(ID_EX_microop),   .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_PC4_REG     (.Din(IF_ID_PC_Plus_4), .Qout(ID_EX_PC_Plus_4), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_MemSize_REG  (.Din(ID_MemSize),       .Qout(ID_EX_MemSize),     .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_Rdata1_REG  (.Din(ID_Rdata1),    .Qout(ID_EX_REG1_DATA), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_Rdata2_REG  (.Din(ID_Rdata2),    .Qout(ID_EX_REG2_DATA), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   Reg ID_EX_RWrEn_REG   (.Din(ID_RWrEn),  .Qout(ID_EX_RWrEn),     .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_MemWrEn_REG (.Din(ID_MemWrEn),   .Qout(ID_EX_MemWrEn),   .WE(1'b1), .CLK(clk), .RST(rst));
+
+   Reg ID_EX_RSRC1_REG (.Din(ID_Rsrc1), .Qout(ID_EX_Rsrc1), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_RSRC2_REG (.Din(ID_Rsrc2), .Qout(ID_EX_Rsrc2), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_RDST_REG  (.Din(ID_Rdst),  .Qout(ID_EX_Rdst),  .WE(1'b1), .CLK(clk), .RST(rst));
+
+   Reg ID_EX_IMMB_REG (.Din(ID_immB),  .Qout(ID_EX_immB),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMJ_REG (.Din(ID_immJ),  .Qout(ID_EX_immJ),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMJR_REG(.Din(ID_immJR), .Qout(ID_EX_immJR), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMI_REG (.Din(ID_immI),  .Qout(ID_EX_immI),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMU_REG (.Din(ID_immU),  .Qout(ID_EX_immU),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMS_REG (.Din(ID_immS),  .Qout(ID_EX_immS),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_isLoad_REG (.Din(ID_isLoad), .Qout(ID_EX_isLoad), .WE(1'b1), .CLK(clk), .RST(rst));
+
+   ////////////////////////////////////////////////////////////////////////////////
+   // SECTION 3: EXECUTE (EX)
+   // ALU do math and EX/MEM latchy
+   ////////////////////////////////////////////////////////////////////////////////
+
+
+
+   // --- EX Components ---
+   // now uses ExecutionUnit, opA/opB etc. (I-type/branch mux not fancy here)
+   //ExecutionUnit EU(.out(ALU_Out), .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .func(ID_EX_funct3), .auxFunc(ID_EX_funct7));
+
+   ExecutionUnit EU (
+      .EXout(EX_ALU_Out), .EX_NPC(EX_NPC), .EX_br_taken(EX_br_taken),
+      .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .microop(ID_EX_microop),
+      .PC(ID_EX_PC), .PC_Plus_4(ID_EX_PC_Plus_4),
+      .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU), .immS(ID_EX_immS));
+
+   // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
+
+   Reg EX_MEM_ALU  (.Din(EX_ALU_Out),        .Qout(EX_MEM_ALU_Out),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg EX_MEM_SD   (.Din(ID_EX_REG2_DATA), .Qout(EX_MEM_store_data), .WE(1'b1), .CLK(clk), .RST(rst));
+
+
+
+   assign EX_MEM_ctrl_in = {
+   22'b0,
+   ID_EX_isLoad,     // [9]  memToReg
+   ID_EX_MemSize,    // [8:7]
+   ID_EX_MemWrEn,    // [6]
+   ID_EX_RWrEn,      // [5]
+   ID_EX_Rdst        // [4:0]
+   };
+   Reg EX_MEM_CTRL (.Din(EX_MEM_ctrl_in), .Qout(EX_MEM_ctrl_out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+
+   assign EX_MEM_MemWrEn = EX_MEM_ctrl_out[6];
+   assign EX_MEM_MemSize = EX_MEM_ctrl_out[8:7];
+   assign EX_MEM_memToReg= EX_MEM_ctrl_out[9];
+   
+   assign EX_MEM_Rdst  = EX_MEM_ctrl_out[4:0];
+   assign EX_MEM_RWrEn = EX_MEM_ctrl_out[5];
+
+   // prepare data bundle: {zero pad, dst reg, wen}
+ 
+
+   ////////////////////////////////////////////////////////////////////////////////
+   // SECTION 4: MEMORY (MEM)
+   // data mem setup and MEM/WB latching
+   ////////////////////////////////////////////////////////////////////////////////
+
+   // --- MEM Wires & Logic ---
+   // unpack EX/MEM pipeline regs
+
+
+
+   Reg EX_MEM_MICROOP  (.Din(ID_EX_microop),    .Qout(EX_MEM_microop),  .WE(1'b1), .CLK(clk), .RST(rst));
+
+   // hardwired placeholders (no real data mem impl yet)
+   assign DataAddr = 32'b0;
+   assign StoreData = 32'b0;
+   assign MEM_load_byte =
+      (EX_MEM_ALU_Out[1:0] == 2'b00) ? MEM_DataWord[7:0]   :
+      (EX_MEM_ALU_Out[1:0] == 2'b01) ? MEM_DataWord[15:8]  :
+      (EX_MEM_ALU_Out[1:0] == 2'b10) ? MEM_DataWord[23:16] :
+      MEM_DataWord[31:24];
+   assign MEM_load_half =
+   (EX_MEM_ALU_Out[1] == 1'b0) ? MEM_DataWord[15:0] : MEM_DataWord[31:16];
+   assign MEM_load_ext =
+   (EX_MEM_microop == `MICROOP_LB)  ? {{24{MEM_load_byte[7]}}, MEM_load_byte} :
+   (EX_MEM_microop == `MICROOP_LBU) ? {24'b0, MEM_load_byte} :
+   (EX_MEM_microop == `MICROOP_LH)  ? {{16{MEM_load_half[15]}}, MEM_load_half} :
+   (EX_MEM_microop == `MICROOP_LHU) ? {16'b0, MEM_load_half} :
+   (EX_MEM_microop == `MICROOP_LW)  ? MEM_DataWord :
+   MEM_DataWord;
+
+
+   // pass result to writeback stage
+   assign MEM_WB_data_in = {19'b0, EX_MEM_microop, EX_MEM_memToReg, EX_MEM_Rdst, EX_MEM_RWrEn};
+   assign MEM_WB_microop  = MEM_WB_data_out[12:7];
+   assign MEM_WB_memToReg = MEM_WB_data_out[6];
+   Reg MEM_WB_MEMDATA (.Din(MEM_load_ext), .Qout(MEM_WB_memdata), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg MEM_WB_ALU  (.Din(EX_MEM_ALU_Out), .Qout(MEM_WB_ALU_Out),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg MEM_WB_data (.Din(MEM_WB_data_in), .Qout(MEM_WB_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+
+   ////////////////////////////////////////////////////////////////////////////////
+   // SECTION 5: WRITEBACK (WB)
+   // choose result and make regfile write signals
+   ////////////////////////////////////////////////////////////////////////////////
+   assign WB_RWrdata = (MEM_WB_memToReg) ? MEM_WB_memdata : MEM_WB_ALU_Out;
+
+
+   // extract dst reg
+   assign MEM_WB_Rdst  = MEM_WB_data_out[5:1];
+   
+   // make write enable (dont write to x0)
+   assign MEM_WB_RWrEn = MEM_WB_data_out[0] && (MEM_WB_Rdst != 5'd0);
+
+   // in full cpu this would mux ALU vs Mem data based on inst, here left simple
+   // assign RWrdata = MEM_WB_ALU_Out; // (commented out originally)
+
+endmodule
+
+
+
+module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU, immS);
+   output [`WORD_WIDTH-1:0] EXout;
+   output [`WORD_WIDTH-1:0] EX_NPC;
+   output EX_br_taken;
+   input [`WORD_WIDTH-1:0]  opA, opB;
+   
+   input [5:0] 	 microop;
+   input [`WORD_WIDTH-1:0] PC;
+   input [`WORD_WIDTH-1:0] PC_Plus_4;
+   
+   input [`WORD_WIDTH-1:0] immB; 
+   input [`WORD_WIDTH-1:0] immJ;
+   input [`WORD_WIDTH-1:0] immJR; 
+   input [`WORD_WIDTH-1:0] immI;
+   input [`WORD_WIDTH-1:0] immU;
+   input [`WORD_WIDTH-1:0] immS;
+   wire [11:0] imm12 = immI[11:0];
+
+   wire signed [63:0]signed_a = $signed({{32{opA[31]}}, opA});
+   wire signed [63:0]unsigned_b = $signed({32'b0, opB});
+   wire signed [63:0] mult_signed   = $signed(opA) * $signed(opB);
+   wire [63:0] mult_signed_u = signed_a * unsigned_b;
+   wire [63:0] mult_unsigned = $unsigned(opA) * $unsigned(opB);
+   wire signed [31:0] div_signed   = $signed(opA) / $signed(opB);
+   wire signed [31:0] rem_signed   = $signed(opA) % $signed(opB);
+   
+
+   wire [`WORD_WIDTH-1:0] 	 addSub;
+
+   wire [4:0] sh = opB[4:0];
+   wire [31:0] srl_val = opA >> sh; // SRL
+   wire [31:0] sra_mask = {32{opA[31]}} & ~(32'hFFFF_FFFF >> sh);
+   wire [31:0] sra_val = srl_val | sra_mask; // SRA result(mask with MSB)
+
+   assign EXout = (microop==`MICROOP_ADD) ? (opA + opB) : // add
+                  (microop==`MICROOP_SUB) ? (opA - opB) : // sub
+                  (microop==`MICROOP_XOR) ? (opA ^ opB) : // XOR
+                  (microop==`MICROOP_OR)  ? (opA | opB) : // OR
+                  (microop==`MICROOP_AND) ? (opA & opB) : // AND
+                  (microop==`MICROOP_SLL) ? (opA << opB[4:0]) : // SLL
+                  (microop==`MICROOP_SRL) ? (opA >> opB[4:0]) : // SRL
+                  (microop==`MICROOP_SRA) ? sra_val : // SRA
+                  (microop==`MICROOP_SLT) ? ($signed(opA) < $signed(opB) ? 32'd1 : 32'd0) : // SLT
+                  (microop==`MICROOP_SLTU) ? (opA < opB ? 32'd1 : 32'd0) : // SLTU
+                  (microop==`MICROOP_ADDI) ? (opA + immI) : // ADDI
+                  (microop==`MICROOP_XORI) ? (opA ^ immI) : // XORI
+                  (microop==`MICROOP_ORI)  ? (opA | immI) : // ORI
+                  (microop==`MICROOP_ANDI) ? (opA & immI) : // ANDI
+                  (microop==`MICROOP_SLLI) ? (opA << immI[4:0]) : // SLLI
+                  (microop==`MICROOP_SRLI) ? (opA >> immI[4:0]) : // SRLI
+                  (microop==`MICROOP_SRAI) ? ($signed(opA) >>> immI[4:0]) : // SRAI
+                  (microop==`MICROOP_SLTI) ? ($signed(opA) < $signed(immI) ? 32'd1 : 32'd0) : // SLTI
+                  (microop==`MICROOP_SLTIU) ? ($unsigned(opA) < $unsigned(immI) ? 32'd1 : 32'd0) : // SLTIU
+                  (microop==`MICROOP_LB)  ? (opA + immI) : // LB
+                  (microop==`MICROOP_LH)  ? (opA + immI) : // LH
+                  (microop==`MICROOP_LW)  ? (opA + immI) : // LW
+                  (microop==`MICROOP_LBU) ? (opA + immI) : // LBU
+                  (microop==`MICROOP_LHU) ? (opA + immI) : // LHU
+                  ((microop==`MICROOP_SB) || (microop==`MICROOP_SH) || (microop==`MICROOP_SW)) ? (opA + immS) : // SB/SH/SW
+                  (microop==`MICROOP_JAL)  ? PC_Plus_4 : // JAL
+                  (microop==`MICROOP_JALR) ? PC_Plus_4 : // JALR (return value)
+                  (microop==`MICROOP_LUI)  ? immU : // LUI
+                  (microop==`MICROOP_AUIPC)? (PC + immU) : // AUIPC
+                  (microop==`MICROOP_MUL)  ? mult_signed[31:0] : // MUL
+                  (microop==`MICROOP_MULH) ? mult_signed[63:32] : // MULH
+                  (microop==`MICROOP_MULHSU)? mult_signed_u[63:32] : // MULHSU
+                  (microop==`MICROOP_MULHU)? mult_unsigned[63:32] : // MULHU
+                  (microop==`MICROOP_DIV)  ? div_signed : // DIV
+                  (microop==`MICROOP_DIVU) ? ($unsigned(opA) / $unsigned(opB)) : // DIVU
+                  (microop==`MICROOP_REM)  ? rem_signed : // REM
+                  (microop==`MICROOP_REMU) ? ($unsigned(opA) % $unsigned(opB)) : // REMU
+                  32'b0;
+
+   assign EX_NPC = (microop==`MICROOP_BEQ && (opA == opB)) ?  (PC + immB) : // BEQ
+                (microop==`MICROOP_BNE && (opA != opB)) ?  (PC + immB) : // BNE
+                (microop==`MICROOP_BLT && ($signed(opA) < $signed(opB))) ? (PC + immB) : // BLT
+                (microop==`MICROOP_BGE && ($signed(opA) >= $signed(opB))) ? (PC + immB) : // BGE
+                (microop==`MICROOP_BLTU && ($unsigned(opA) < $unsigned(opB))) ? (PC + immB) : // BLTU
+                (microop==`MICROOP_BGEU && ($unsigned(opA) >= $unsigned(opB))) ? (PC + immB) : // BGEU
+                (microop==`MICROOP_JAL)  ? (PC + immJ) : // JAL
+                (microop==`MICROOP_JALR) ? (opA + immJR) : // JALR
+                PC_Plus_4;
+   assign EX_br_taken = (microop==`MICROOP_BEQ && (opA == opB)) ?  1'b1 : // BEQ
+                (microop==`MICROOP_BNE && (opA != opB)) ?  1'b1 : // BNE
+                (microop==`MICROOP_BLT && ($signed(opA) < $signed(opB))) ? 1'b1 : // BLT
+                (microop==`MICROOP_BGE && ($signed(opA) >= $signed(opB))) ? 1'b1 : // BGE
+                (microop==`MICROOP_BLTU && ($unsigned(opA) < $unsigned(opB))) ? 1'b1 : // BLTU
+                (microop==`MICROOP_BGEU && ($unsigned(opA) >= $unsigned(opB))) ? 1'b1 : // BGEU
+                (microop==`MICROOP_JAL)  ? 1'b1 : // JAL
+                (microop==`MICROOP_JALR) ? 1'b1: // JALR
+                1'b0;
+
+
+
+
+   
+
+endmodule // ExecutionUnit
