@@ -243,7 +243,76 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] NPC;            // next PC to put in reg
    wire [`WORD_WIDTH-1:0] PC_Plus_4;      // PC + 4 (norm step)
    wire [`WORD_WIDTH-1:0] InstWord;       // fetched instr bits
+   // --- IF/ID Pipeline Registers (latch from IF to ID) ---
+   wire [`WORD_WIDTH-1:0] IF_ID_PC;
+   wire [`WORD_WIDTH-1:0] IF_ID_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] IF_ID_InstWord;
+
+   // --- ID Wires & Decoding ---
+   wire [6:0]  opcode = IF_ID_InstWord[6:0];   
+   wire [4:0]  Rdst   = IF_ID_InstWord[11:7]; 
+   wire [4:0]  Rsrc1  = IF_ID_InstWord[19:15]; 
+   wire [4:0]  Rsrc2  = IF_ID_InstWord[24:20];
+   wire [2:0]  funct3 = IF_ID_InstWord[14:12];
+   wire [6:0]  funct7 = IF_ID_InstWord[31:25];
+   // immed wires 
+   wire [`WORD_WIDTH-1:0] immB;
+   wire [`WORD_WIDTH-1:0] immJ;
+   wire [`WORD_WIDTH-1:0] immJR;
+   wire [`WORD_WIDTH-1:0] immI;
+   wire [`WORD_WIDTH-1:0] immU;
+
+
+   // --- ID/EX Pipeline Registers (latch ID->EX) ---
+   wire [`WORD_WIDTH-1:0] ID_EX_PC;
+   wire [`WORD_WIDTH-1:0] ID_EX_PC_Plus_4;
+   wire [`WORD_WIDTH-1:0] ID_EX_REG1_DATA;
+   wire [`WORD_WIDTH-1:0] ID_EX_REG2_DATA;
+   wire ID_EX_MemWrEn;
+   wire ID_EX_RWrEn;
+   wire [5:0] ID_EX_microop;
+   wire [4:0] ID_EX_Rsrc1;
+   wire [4:0] ID_EX_Rsrc2;
+   wire [4:0] ID_EX_Rdst;
+   wire [`WORD_WIDTH-1:0] Rdata1, Rdata2; // read data from regfile
+   wire [5:0] microop;                    // internal tiny opname
+   wire ID_RWrEn;                         // should write reg? (per inst)
    
+   // ID/EX pipeline regs for immeds
+   wire [`WORD_WIDTH-1:0] ID_EX_immB;
+   wire [`WORD_WIDTH-1:0] ID_EX_immJ;
+   wire [`WORD_WIDTH-1:0] ID_EX_immJR;
+   wire [`WORD_WIDTH-1:0] ID_EX_immI;
+   wire [`WORD_WIDTH-1:0] ID_EX_immU;
+
+   // --- EX Wires ---
+   wire [`WORD_WIDTH-1:0] ALU_Out;
+   wire [`WORD_WIDTH-1:0] EX_MEM_data_in;
+   wire [`WORD_WIDTH-1:0] EX_NPC;
+
+   // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
+   wire [`WORD_WIDTH-1:0] EX_MEM_ALU_Out;
+   wire [4:0]  EX_MEM_Rdst;
+   wire        EX_MEM_RWrEn;
+   wire        EX_MEM_MemWrEn;
+   wire [`WORD_WIDTH-1:0] EX_MEM_data_out;
+   // --- MEM Wires & Logic ---
+   wire [`WORD_WIDTH-1:0] DataAddr;
+   wire [`WORD_WIDTH-1:0] StoreData;
+   wire [`WORD_WIDTH-1:0] DataWord; // mem read out
+   wire [1:0]  MemSize;             // driven by ID logic in this version
+   wire        MemWrEn;             // driven by ID logic in this version
+
+   // --- MEM/WB Pipeline Registers (latch MEM->WB) ---
+   wire [31:0] MEM_WB_ALU_Out;
+   wire [31:0] MEM_WB_data_in;
+   wire [31:0] MEM_WB_data_out;
+
+   // --- WB Wires & Logic ---
+   wire [4:0]  MEM_WB_Rdst;
+   wire        MEM_WB_RWrEn;
+   wire [`WORD_WIDTH-1:0] RWrdata;
+
    // --- IF Components ---
    
    // Program Counter Register
@@ -267,9 +336,7 @@ module PipelinedCPU(halt, clk, rst);
    assign NPC = EX_NPC;
 
    // --- IF/ID Pipeline Registers (latch from IF to ID) ---
-   wire [`WORD_WIDTH-1:0] IF_ID_PC;
-   wire [`WORD_WIDTH-1:0] IF_ID_PC_Plus_4;
-   wire [`WORD_WIDTH-1:0] IF_ID_InstWord;
+
 
    Reg IF_ID_PC_REG     (.Din(PC),        .Qout(IF_ID_PC),         .WE(1'b1), .CLK(clk), .RST(rst));
    Reg IF_ID_PC4_REG    (.Din(PC_Plus_4), .Qout(IF_ID_PC_Plus_4),  .WE(1'b1), .CLK(clk), .RST(rst));
@@ -281,24 +348,7 @@ module PipelinedCPU(halt, clk, rst);
    // instr slice, reg read, control bitz, and ID/EX latchy
    ////////////////////////////////////////////////////////////////////////////////
 
-   // --- ID Wires & Decoding ---
-   wire [6:0]  opcode = IF_ID_InstWord[6:0];   
-   wire [4:0]  Rdst   = IF_ID_InstWord[11:7]; 
-   wire [4:0]  Rsrc1  = IF_ID_InstWord[19:15]; 
-   wire [4:0]  Rsrc2  = IF_ID_InstWord[24:20];
-   wire [2:0]  funct3 = IF_ID_InstWord[14:12];
-   wire [6:0]  funct7 = IF_ID_InstWord[31:25];
-   // immed wires 
-   wire [`WORD_WIDTH-1:0] immB;
-   wire [`WORD_WIDTH-1:0] immJ;
-   wire [`WORD_WIDTH-1:0] immJR;
-   wire [`WORD_WIDTH-1:0] immI;
-   wire [`WORD_WIDTH-1:0] immU;
 
-   // --- EX Wires ---
-   wire [`WORD_WIDTH-1:0] ALU_Out;
-   wire [`WORD_WIDTH-1:0] EX_MEM_data_in;
-   wire [`WORD_WIDTH-1:0] EX_NPC;
 
    // imm gen (pre-decode from IF_ID_InstWord)
    assign immI = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
@@ -321,10 +371,7 @@ module PipelinedCPU(halt, clk, rst);
 
    assign immJR = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
 
-   wire [`WORD_WIDTH-1:0] Rdata1, Rdata2; // read data from regfile
-   wire [5:0] microop;                    // internal tiny opname
-   wire ID_RWrEn;                         // should write reg? (per inst)
-   
+
    // --- ID Components ---
 
    // Register File (reads here, writes from WB stage feedback)
@@ -399,24 +446,7 @@ module PipelinedCPU(halt, clk, rst);
                         (microop == `MICROOP_BGE) || (microop == `MICROOP_BLTU) || (microop == `MICROOP_BGEU) ||
                         (microop == `MICROOP_INVALID));
 
-   // --- ID/EX Pipeline Registers (latch ID->EX) ---
-   wire [`WORD_WIDTH-1:0] ID_EX_PC;
-   wire [`WORD_WIDTH-1:0] ID_EX_PC_Plus_4;
-   wire [`WORD_WIDTH-1:0] ID_EX_REG1_DATA;
-   wire [`WORD_WIDTH-1:0] ID_EX_REG2_DATA;
-   wire ID_EX_MemWrEn;
-   wire ID_EX_RWrEn;
-   wire [5:0] ID_EX_microop;
-   wire [4:0] ID_EX_Rsrc1;
-   wire [4:0] ID_EX_Rsrc2;
-   wire [4:0] ID_EX_Rdst;
 
-   // ID/EX pipeline regs for immeds
-   wire [`WORD_WIDTH-1:0] ID_EX_immB;
-   wire [`WORD_WIDTH-1:0] ID_EX_immJ;
-   wire [`WORD_WIDTH-1:0] ID_EX_immJR;
-   wire [`WORD_WIDTH-1:0] ID_EX_immI;
-   wire [`WORD_WIDTH-1:0] ID_EX_immU;
 
    Reg ID_EX_INSTR_CODE  (.Din(microop),   .Qout(ID_EX_microop),   .WE(1'b1), .CLK(clk), .RST(rst));
    Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(1'b1), .CLK(clk), .RST(rst));
@@ -458,11 +488,7 @@ module PipelinedCPU(halt, clk, rst);
       .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU));
 
    // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
-   wire [`WORD_WIDTH-1:0] EX_MEM_ALU_Out;
-   wire [4:0]  EX_MEM_Rdst;
-   wire        EX_MEM_RWrEn;
-   wire        EX_MEM_MemWrEn;
-   wire [`WORD_WIDTH-1:0] EX_MEM_data_out;
+
 
    Reg EX_MEM_ALU  (.Din(ALU_Out),        .Qout(EX_MEM_ALU_Out),  .WE(1'b1), .CLK(clk), .RST(rst));
    Reg EX_MEM_data (.Din(EX_MEM_data_in), .Qout(EX_MEM_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
@@ -481,20 +507,13 @@ module PipelinedCPU(halt, clk, rst);
    assign EX_MEM_Rdst   = EX_MEM_data_out[5:1];
    assign EX_MEM_RWrEn  = EX_MEM_data_out[0];
 
-   wire [`WORD_WIDTH-1:0] DataAddr;
-   wire [`WORD_WIDTH-1:0] StoreData;
-   wire [`WORD_WIDTH-1:0] DataWord; // mem read out
-   wire [1:0]  MemSize;             // driven by ID logic in this version
-   wire        MemWrEn;             // driven by ID logic in this version
+
 
    // hardwired placeholders (no real data mem impl yet)
    assign DataAddr = 32'b0;
    assign StoreData = 32'b0;
 
-   // --- MEM/WB Pipeline Registers (latch MEM->WB) ---
-   wire [31:0] MEM_WB_ALU_Out;
-   wire [31:0] MEM_WB_data_in;
-   wire [31:0] MEM_WB_data_out;
+
 
    // pass result to writeback stage
    assign MEM_WB_data_in = {26'b0, EX_MEM_Rdst, EX_MEM_RWrEn};
@@ -508,10 +527,7 @@ module PipelinedCPU(halt, clk, rst);
    // choose result and make regfile write signals
    ////////////////////////////////////////////////////////////////////////////////
 
-   // --- WB Wires & Logic ---
-   wire [4:0]  MEM_WB_Rdst;
-   wire        MEM_WB_RWrEn;
-   wire [`WORD_WIDTH-1:0] RWrdata;
+
 
    // extract dst reg
    assign MEM_WB_Rdst  = MEM_WB_data_out[5:1];
