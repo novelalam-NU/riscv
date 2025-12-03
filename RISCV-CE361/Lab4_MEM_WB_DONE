@@ -237,7 +237,8 @@ module PipelinedCPU(halt, clk, rst);
    // SECTION 1: INSTRUCTION FETCH (IF)
    // PC make, instr fetch, and IF/ID pipeline latchy
    ////////////////////////////////////////////////////////////////////////////////
-   
+   wire [31:0] PC       = IF_PC;
+   wire [31:0] InstWord = IF_InstWord;
    // --- IF Wires ---
    wire [`WORD_WIDTH-1:0] IF_PC;             // currnt PC pointer
    wire [`WORD_WIDTH-1:0] IF_NPC;            // next PC to put in reg
