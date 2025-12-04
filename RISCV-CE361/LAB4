@@ -254,6 +254,8 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] IF_ID_PC;
    wire [`WORD_WIDTH-1:0] IF_ID_PC_Plus_4;
    wire [`WORD_WIDTH-1:0] IF_ID_InstWord;
+   wire flush = EX_br_taken;
+   wire [31:0] IF_ID_inst_in = flush ? 32'h13000000 : IF_InstWord; // NOP=ADDI x0,x0,0
 
    // --- ID Wires & Decoding ---
    wire [6:0]  ID_opcode = IF_ID_InstWord[6:0];   
@@ -379,7 +381,7 @@ module PipelinedCPU(halt, clk, rst);
 
    Reg IF_ID_PC_REG     (.Din(IF_PC),        .Qout(IF_ID_PC),         .WE(1'b1), .CLK(clk), .RST(rst));
    Reg IF_ID_PC4_REG    (.Din(IF_PC_Plus_4), .Qout(IF_ID_PC_Plus_4),  .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg IF_ID_INST_REG   (.Din(IF_InstWord),  .Qout(IF_ID_InstWord),   .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg IF_ID_INST_REG   (.Din(IF_ID_inst_in),  .Qout(IF_ID_InstWord),   .WE(1'b1), .CLK(clk), .RST(rst));
 
 
    ////////////////////////////////////////////////////////////////////////////////
