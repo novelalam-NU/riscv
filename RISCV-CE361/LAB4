@@ -5,6 +5,10 @@
 // Groupname:
 // NetIDs:
 
+
+//iverilog -o out LAB4.v lab4_tb.v 
+//./out
+
 // Some useful defines...please add your own
 `define WORD_WIDTH 32
 `define NUM_REGS 32
@@ -237,7 +241,10 @@ module PipelinedCPU(halt, clk, rst);
    // SECTION 1: INSTRUCTION FETCH (IF)
    // PC make, instr fetch, and IF/ID pipeline latchy
    ////////////////////////////////////////////////////////////////////////////////
-   
+   wire [31:0] PC       = IF_PC;
+   wire [31:0] InstWord = IF_InstWord;
+
+
    // --- IF Wires ---
    wire [`WORD_WIDTH-1:0] IF_PC;             // currnt PC pointer
    wire [`WORD_WIDTH-1:0] IF_NPC;            // next PC to put in reg
@@ -256,13 +263,25 @@ module PipelinedCPU(halt, clk, rst);
    
    wire [2:0]  ID_funct3 = IF_ID_InstWord[14:12];
    wire [6:0]  ID_funct7 = IF_ID_InstWord[31:25];
+   wire [1:0] ID_MemSize;
+   wire       ID_MemWrEn;
+   wire       ID_RWrEn;
+   
+   wire [`WORD_WIDTH-1:0] ID_Rdata1;
+   wire [`WORD_WIDTH-1:0] ID_Rdata1_with_Forward;
+   wire [`WORD_WIDTH-1:0] ID_Rdata2;
+
+   wire [`WORD_WIDTH-1:0] ID_Rdata2_with_Forward;
    // immed wires 
    wire [`WORD_WIDTH-1:0] ID_immB;
    wire [`WORD_WIDTH-1:0] ID_immJ;
    wire [`WORD_WIDTH-1:0] ID_immJR;
    wire [`WORD_WIDTH-1:0] ID_immI;
    wire [`WORD_WIDTH-1:0] ID_immU;
+   wire [`WORD_WIDTH-1:0] ID_immS;
+   wire ID_isLoad;
    wire [5:0] ID_microop;
+ 
 
    // --- ID/EX Pipeline Registers (latch ID->EX) ---
    wire [`WORD_WIDTH-1:0] ID_EX_PC;
@@ -275,8 +294,8 @@ module PipelinedCPU(halt, clk, rst);
    wire [4:0] ID_EX_Rsrc1;
    wire [4:0] ID_EX_Rsrc2;
    wire [4:0] ID_EX_Rdst;
-   wire [`WORD_WIDTH-1:0] ID_EX_Rdata1, ID_EX_Rdata2; // read data from regfile
-
+   wire [1:0] ID_EX_MemSize;
+   wire ID_EX_isLoad;
    
    // ID/EX pipeline regs for immeds
    wire [`WORD_WIDTH-1:0] ID_EX_immB;
@@ -284,33 +303,50 @@ module PipelinedCPU(halt, clk, rst);
    wire [`WORD_WIDTH-1:0] ID_EX_immJR;
    wire [`WORD_WIDTH-1:0] ID_EX_immI;
    wire [`WORD_WIDTH-1:0] ID_EX_immU;
+   wire [`WORD_WIDTH-1:0] ID_EX_immS;
+
+
+
 
    // --- EX Wires ---
+
+   /* Stall Logic */
+   wire       stall;
+
+
    wire [`WORD_WIDTH-1:0] EX_ALU_Out;
-   wire [`WORD_WIDTH-1:0] EX_MEM_data_in;
    wire [`WORD_WIDTH-1:0] EX_NPC;
-   wire [4:0] EX_Rdst;
    
-   wire EX_br_taken;
+   wire EX_br_taken; //set back to IF stage
+
 
    // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
    wire [`WORD_WIDTH-1:0] EX_MEM_ALU_Out;
-   wire [4:0]  EX_MEM_Rdst;
-   wire        EX_MEM_RWrEn;
+
    wire        EX_MEM_MemWrEn;
    wire [1:0]  EX_MEM_MemSize;
-   wire [`WORD_WIDTH-1:0] EX_MEM_data_out;
+
+   wire [31:0] EX_MEM_store_data;
+   wire [31:0] EX_MEM_ctrl_in, EX_MEM_ctrl_out;
+   wire        EX_MEM_memToReg;
+   wire [5:0]  EX_MEM_microop;
+   wire [4:0]  EX_MEM_Rdst;
+   wire EX_MEM_RWrEn;
    // --- MEM Wires & Logic ---
    wire [`WORD_WIDTH-1:0] DataAddr;
    wire [`WORD_WIDTH-1:0] StoreData;
-   wire [`WORD_WIDTH-1:0] DataWord; // mem read out
-
+   wire [`WORD_WIDTH-1:0] MEM_DataWord; // mem read out
+   wire [7:0] MEM_load_byte;
+   wire [15:0] MEM_load_half;
+   wire [31:0] MEM_load_ext;
 
    // --- MEM/WB Pipeline Registers (latch MEM->WB) ---
    wire [31:0] MEM_WB_ALU_Out;
    wire [31:0] MEM_WB_data_in;
    wire [31:0] MEM_WB_data_out;
-
+   wire [5:0]  MEM_WB_microop;
+   wire        MEM_WB_memToReg;
+   wire [31:0] MEM_WB_memdata;
    // --- WB Wires & Logic ---
    wire [4:0]  MEM_WB_Rdst;
    wire        MEM_WB_RWrEn;
@@ -324,12 +360,12 @@ module PipelinedCPU(halt, clk, rst);
    // Memory Unit (Dual job: get Instr in IF, data read/write in MEM)
    // note: data ports driven by MEM stage signals later
    Mem MEM(
-      .InstAddr(PC), 
-      .InstOut(InstWord), 
-      .DataAddr(DataAddr), 
+      .InstAddr(IF_PC), 
+      .InstOut(IF_InstWord), 
+      .DataAddr(EX_MEM_ALU_Out), 
       .DataSize(EX_MEM_MemSize), 
-      .DataIn(StoreData), 
-      .DataOut(DataWord), 
+      .DataIn(EX_MEM_store_data), 
+      .DataOut(MEM_DataWord), 
       .WE(EX_MEM_MemWrEn), 
       .CLK(clk)
    );
@@ -375,6 +411,7 @@ module PipelinedCPU(halt, clk, rst);
 
    assign ID_immJR = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:20]};
 
+   assign ID_immS = {{20{IF_ID_InstWord[31]}}, IF_ID_InstWord[31:25], IF_ID_InstWord[11:7]};
 
    // --- ID Components ---
 
@@ -383,11 +420,11 @@ module PipelinedCPU(halt, clk, rst);
    RegFile RF(
       .AddrA(ID_Rsrc1), .DataOutA(ID_Rdata1), 
       .AddrB(ID_Rsrc2), .DataOutB(ID_Rdata2), 
-      .AddrW(MEM_WB_Rdst), .DataInW(MEM_WB_ALU_Out), .WenW(MEM_WB_RWrEn), .CLK(clk)
+      .AddrW(MEM_WB_Rdst), .DataInW(WB_RWrdata), .WenW(MEM_WB_RWrEn), .CLK(clk) //three of them come from WB
    );
 
    // Control Logic: map risc-v opcode fields to our microops
-   assign ID_microop = 
+   assign     ID_microop = 
       (ID_opcode == `ADD_OP && ID_funct3 == `ADD_funct3 && ID_funct7 == `ADD_funct7) ? `MICROOP_ADD :
       (ID_opcode == `SUB_OP && ID_funct3 == `SUB_funct3 && ID_funct7 == `SUB_funct7) ? `MICROOP_SUB :
       (ID_opcode == `XOR_OP && ID_funct3 == `XOR_funct3 && ID_funct7 == `XOR_funct7) ? `MICROOP_XOR :
@@ -434,13 +471,15 @@ module PipelinedCPU(halt, clk, rst);
       (ID_opcode == `REM_OP && ID_funct3 == `REM_funct3 && ID_funct7 == `REM_funct7) ? `MICROOP_REM :
       (ID_opcode == `REMU_OP && ID_funct3 == `REMU_funct3 && ID_funct7 == `REMU_funct7) ? `MICROOP_REMU :
       `MICROOP_INVALID;
+   assign ID_isLoad =
+      (ID_microop==`MICROOP_LB)  || (ID_microop==`MICROOP_LH)  || (ID_microop==`MICROOP_LW) || (ID_microop==`MICROOP_LBU) || (ID_microop==`MICROOP_LHU);
 
    // hazard / valid logic (simple)
-   assign halt = (ID_microop == `MICROOP_INVALID);
-
+   // only assert halt for invalid microop when an instruction is present
+   assign halt = (ID_microop==`MICROOP_INVALID);
    // control signals from ID_microop
-   assign ID_MemSize = ((ID_microop == `MICROOP_LB) || (ID_microop == `MICROOP_LBU)) ? `SIZE_BYTE :
-                    ((ID_microop == `MICROOP_LH) || (ID_microop == `MICROOP_LHU)) ? `SIZE_HWORD :
+   assign ID_MemSize = ((ID_microop == `MICROOP_LB) || (ID_microop == `MICROOP_LBU) ||  (ID_microop == `MICROOP_SB)) ? `SIZE_BYTE :
+                    ((ID_microop == `MICROOP_LH) || (ID_microop == `MICROOP_LHU) || (ID_microop == `MICROOP_SH)) ? `SIZE_HWORD :
                     `SIZE_WORD;
    
    assign ID_MemWrEn = (ID_microop == `MICROOP_SB) || (ID_microop == `MICROOP_SH) || (ID_microop == `MICROOP_SW);
@@ -452,27 +491,31 @@ module PipelinedCPU(halt, clk, rst);
 
 
 
-   Reg ID_EX_INSTR_CODE  (.Din(ID_microop),   .Qout(ID_EX_microop),   .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_PC4_REG     (.Din(IF_ID_PC_Plus_4), .Qout(ID_EX_PC_Plus_4), .WE(1'b1), .CLK(clk), .RST(rst));
+   
+   //pipeline registers to transfer to next stage
+   
 
-   Reg ID_EX_Rdata1_REG  (.Din(Rdata1),    .Qout(ID_EX_REG1_DATA), .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_Rdata2_REG  (.Din(Rdata2),    .Qout(ID_EX_REG2_DATA), .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_INSTR_CODE  (.Din(ID_microop),   .Qout(ID_EX_microop),   .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_PC_REG      (.Din(IF_ID_PC),        .Qout(ID_EX_PC),        .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_PC4_REG     (.Din(IF_ID_PC_Plus_4), .Qout(ID_EX_PC_Plus_4), .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_MemSize_REG  (.Din(ID_MemSize),       .Qout(ID_EX_MemSize),     .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_Rdata1_REG  (.Din(ID_Rdata1),    .Qout(ID_EX_REG1_DATA), .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_Rdata2_REG  (.Din(ID_Rdata2),    .Qout(ID_EX_REG2_DATA), .WE(!stall), .CLK(clk), .RST(rst));
 
-   Reg ID_EX_RWrEn_REG   (.Din(ID_RWrEn),  .Qout(ID_EX_RWrEn),     .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_MemWrEn_REG (.Din(MemWrEn),   .Qout(ID_EX_MemWrEn),   .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_RWrEn_REG   (.Din(ID_RWrEn),  .Qout(ID_EX_RWrEn),     .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_MemWrEn_REG (.Din(ID_MemWrEn),   .Qout(ID_EX_MemWrEn),   .WE(!stall), .CLK(clk), .RST(rst));
 
-   Reg ID_EX_RSRC1_REG (.Din(ID_Rsrc1), .Qout(ID_EX_Rsrc1), .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_RSRC2_REG (.Din(ID_Rsrc2), .Qout(ID_EX_Rsrc2), .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_RDST_REG  (.Din(ID_Rdst),  .Qout(ID_EX_Rdst),  .WE(1'b1), .CLK(clk), .RST(rst));
+   Reg ID_EX_RSRC1_REG (.Din(ID_Rsrc1), .Qout(ID_EX_Rsrc1), .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_RSRC2_REG (.Din(ID_Rsrc2), .Qout(ID_EX_Rsrc2), .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_RDST_REG  (.Din(ID_Rdst),  .Qout(ID_EX_Rdst),  .WE(!stall), .CLK(clk), .RST(rst));
 
-   Reg ID_EX_IMMB_REG (.Din(immB),  .Qout(ID_EX_immB),  .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_IMMJ_REG (.Din(immJ),  .Qout(ID_EX_immJ),  .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_IMMJR_REG(.Din(immJR), .Qout(ID_EX_immJR), .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_IMMI_REG (.Din(immI),  .Qout(ID_EX_immI),  .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg ID_EX_IMMU_REG (.Din(immU),  .Qout(ID_EX_immU),  .WE(1'b1), .CLK(clk), .RST(rst));
-
-
+   Reg ID_EX_IMMB_REG (.Din(ID_immB),  .Qout(ID_EX_immB),  .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMJ_REG (.Din(ID_immJ),  .Qout(ID_EX_immJ),  .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMJR_REG(.Din(ID_immJR), .Qout(ID_EX_immJR), .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMI_REG (.Din(ID_immI),  .Qout(ID_EX_immI),  .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMU_REG (.Din(ID_immU),  .Qout(ID_EX_immU),  .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_IMMS_REG (.Din(ID_immS),  .Qout(ID_EX_immS),  .WE(!stall), .CLK(clk), .RST(rst));
+   Reg ID_EX_isLoad_REG (.Din(ID_isLoad), .Qout(ID_EX_isLoad), .WE(!stall), .CLK(clk), .RST(rst));
 
    ////////////////////////////////////////////////////////////////////////////////
    // SECTION 3: EXECUTE (EX)
@@ -485,22 +528,70 @@ module PipelinedCPU(halt, clk, rst);
    // now uses ExecutionUnit, opA/opB etc. (I-type/branch mux not fancy here)
    //ExecutionUnit EU(.out(ALU_Out), .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .func(ID_EX_funct3), .auxFunc(ID_EX_funct7));
 
+   wire [31:0] src1;
+   wire [31:0] src2;
+
+   // forwarding logic: prefer EX/MEM ALU result if the EX/MEM write is to same reg and it's  a load,
+
+   // EX EX forwarding 
+
+   assign src1 = (ID_EX_Rsrc1 != 5'd0 && ID_EX_Rsrc1 == EX_MEM_Rdst && EX_MEM_RWrEn && !EX_MEM_memToReg) ? EX_MEM_ALU_Out :
+                 (ID_EX_Rsrc1 != 5'd0 && ID_EX_Rsrc1 == MEM_WB_Rdst && MEM_WB_RWrEn) ? WB_RWrdata : //from memstage
+                 ID_EX_REG1_DATA;
+
+   assign src2 = (ID_EX_Rsrc2 != 5'd0 && ID_EX_Rsrc2 == EX_MEM_Rdst && EX_MEM_RWrEn && !EX_MEM_memToReg) ? EX_MEM_ALU_Out :
+                 (ID_EX_Rsrc2 != 5'd0 && ID_EX_Rsrc2 == MEM_WB_Rdst && MEM_WB_RWrEn) ? WB_RWrdata : //from memstage
+                 ID_EX_REG2_DATA;
+
+
+   // Stall if the prvious instruction was a load and there is a load use dependency and not X0
+   assign stall = EX_MEM_memToReg && (EX_MEM_Rdst != 5'd0) && ((EX_MEM_Rdst == ID_EX_Rsrc1) || (EX_MEM_Rdst == ID_EX_Rsrc2));
+
+
+
+
+
    ExecutionUnit EU (
-      .EXout(ID_ALU_Out), .EX_NPC(EX_NPC), .EX_br_taken(EX_br_taken),
-      .opA(ID_EX_REG1_DATA), .opB(ID_EX_REG2_DATA), .microop(ID_EX_microop),
+      .EXout(EX_ALU_Out), .EX_NPC(EX_NPC), .EX_br_taken(EX_br_taken),
+      .opA(src1), .opB(src2), .microop(ID_EX_microop),
       .PC(ID_EX_PC), .PC_Plus_4(ID_EX_PC_Plus_4),
-      .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU));
+      .immB(ID_EX_immB), .immJ(ID_EX_immJ), .immJR(ID_EX_immJR), .immI(ID_EX_immI), .immU(ID_EX_immU), .immS(ID_EX_immS));
+
+
+   
 
    // --- EX/MEM Pipeline Registers (latch EX->MEM) ---
 
    Reg EX_MEM_ALU  (.Din(EX_ALU_Out),        .Qout(EX_MEM_ALU_Out),  .WE(1'b1), .CLK(clk), .RST(rst));
-   Reg EX_MEM_data (.Din(EX_MEM_data_in), .Qout(EX_MEM_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
+   //the value to store in ram is held in REG2
+   Reg EX_MEM_SD   (.Din(ID_EX_REG2_DATA), .Qout(EX_MEM_store_data), .WE(1'b1), .CLK(clk), .RST(rst));
 
+
+
+
+   //passing all the signals along from the ID stage through EX to MEM
+   assign EX_MEM_ctrl_in = {
+   22'b0,
+   ID_EX_isLoad,     // [9]  memToReg
+   ID_EX_MemSize,    // [8:7]
+   ID_EX_MemWrEn,    // [6]
+   ID_EX_RWrEn,      // [5]
+   ID_EX_Rdst        // [4:0]
+   };
+
+   //package it all up
+   Reg EX_MEM_CTRL (.Din(EX_MEM_ctrl_in), .Qout(EX_MEM_ctrl_out), .WE(1'b1), .CLK(clk), .RST(rst));
+
+
+   //unpack into proper pres
+   assign EX_MEM_MemWrEn = EX_MEM_ctrl_out[6];
+   assign EX_MEM_MemSize = EX_MEM_ctrl_out[8:7];
+   assign EX_MEM_memToReg= EX_MEM_ctrl_out[9];
    
+   assign EX_MEM_Rdst  = EX_MEM_ctrl_out[4:0];
+   assign EX_MEM_RWrEn = EX_MEM_ctrl_out[5];
 
-
-   // prepare data bundle: {zero pad, dst reg, wen}
-   assign EX_MEM_data_in = {26'b0, EX_Rdst, EX_RWrEn}; 
+ 
 
    ////////////////////////////////////////////////////////////////////////////////
    // SECTION 4: MEMORY (MEM)
@@ -509,20 +600,40 @@ module PipelinedCPU(halt, clk, rst);
 
    // --- MEM Wires & Logic ---
    // unpack EX/MEM pipeline regs
-   assign EX_MEM_Rdst   = EX_MEM_data_out[5:1];
-   assign EX_MEM_RWrEn  = EX_MEM_data_out[0];
 
 
+
+   Reg EX_MEM_MICROOP  (.Din(ID_EX_microop),    .Qout(EX_MEM_microop),  .WE(1'b1), .CLK(clk), .RST(rst));
 
    // hardwired placeholders (no real data mem impl yet)
    assign DataAddr = 32'b0;
    assign StoreData = 32'b0;
 
+   assign MEM_load_byte =
+      (EX_MEM_ALU_Out[1:0] == 2'b00) ? MEM_DataWord[7:0]   :
+      (EX_MEM_ALU_Out[1:0] == 2'b01) ? MEM_DataWord[15:8]  :
+      (EX_MEM_ALU_Out[1:0] == 2'b10) ? MEM_DataWord[23:16] :
+      MEM_DataWord[31:24];
+
+   assign MEM_load_half =
+   (EX_MEM_ALU_Out[1] == 1'b0) ? MEM_DataWord[15:0] : MEM_DataWord[31:16];
+
+   assign MEM_load_ext =
+   (EX_MEM_microop == `MICROOP_LB)  ? {{24{MEM_load_byte[7]}}, MEM_load_byte} :
+   (EX_MEM_microop == `MICROOP_LBU) ? {24'b0, MEM_load_byte} :
+   (EX_MEM_microop == `MICROOP_LH)  ? {{16{MEM_load_half[15]}}, MEM_load_half} :
+   (EX_MEM_microop == `MICROOP_LHU) ? {16'b0, MEM_load_half} :
+   (EX_MEM_microop == `MICROOP_LW)  ? MEM_DataWord :
+   MEM_DataWord;
 
 
    // pass result to writeback stage
-   assign MEM_WB_data_in = {26'b0, EX_MEM_Rdst, EX_MEM_RWrEn};
+   assign MEM_WB_data_in = {19'b0, EX_MEM_microop, EX_MEM_memToReg, EX_MEM_Rdst, EX_MEM_RWrEn};
+   assign MEM_WB_microop  = MEM_WB_data_out[12:7];
+   assign MEM_WB_memToReg = MEM_WB_data_out[6];
 
+   //pass the loaded data to wb
+   Reg MEM_WB_MEMDATA (.Din(MEM_load_ext), .Qout(MEM_WB_memdata), .WE(1'b1), .CLK(clk), .RST(rst));
    Reg MEM_WB_ALU  (.Din(EX_MEM_ALU_Out), .Qout(MEM_WB_ALU_Out),  .WE(1'b1), .CLK(clk), .RST(rst));
    Reg MEM_WB_data (.Din(MEM_WB_data_in), .Qout(MEM_WB_data_out), .WE(1'b1), .CLK(clk), .RST(rst));
 
@@ -531,7 +642,7 @@ module PipelinedCPU(halt, clk, rst);
    // SECTION 5: WRITEBACK (WB)
    // choose result and make regfile write signals
    ////////////////////////////////////////////////////////////////////////////////
-
+   assign WB_RWrdata = (MEM_WB_memToReg) ? MEM_WB_memdata : MEM_WB_ALU_Out;
 
 
    // extract dst reg
@@ -547,7 +658,7 @@ endmodule
 
 
 
-module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU);
+module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_4,immB, immJ, immJR, immI, immU, immS);
    output [`WORD_WIDTH-1:0] EXout;
    output [`WORD_WIDTH-1:0] EX_NPC;
    output EX_br_taken;
@@ -562,7 +673,7 @@ module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_
    input [`WORD_WIDTH-1:0] immJR; 
    input [`WORD_WIDTH-1:0] immI;
    input [`WORD_WIDTH-1:0] immU;
-
+   input [`WORD_WIDTH-1:0] immS;
    wire [11:0] imm12 = immI[11:0];
 
    wire signed [63:0]signed_a = $signed({{32{opA[31]}}, opA});
@@ -605,7 +716,7 @@ module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_
                   (microop==`MICROOP_LW)  ? (opA + immI) : // LW
                   (microop==`MICROOP_LBU) ? (opA + immI) : // LBU
                   (microop==`MICROOP_LHU) ? (opA + immI) : // LHU
-                  ((microop==`MICROOP_SB) || (microop==`MICROOP_SH) || (microop==`MICROOP_SW)) ? (opA + immI) : // SB/SH/SW
+                  ((microop==`MICROOP_SB) || (microop==`MICROOP_SH) || (microop==`MICROOP_SW)) ? (opA + immS) : // SB/SH/SW
                   (microop==`MICROOP_JAL)  ? PC_Plus_4 : // JAL
                   (microop==`MICROOP_JALR) ? PC_Plus_4 : // JALR (return value)
                   (microop==`MICROOP_LUI)  ? immU : // LUI
@@ -628,8 +739,9 @@ module ExecutionUnit(EXout, EX_NPC, EX_br_taken, opA, opB, microop, PC, PC_Plus_
                 (microop==`MICROOP_BGEU && ($unsigned(opA) >= $unsigned(opB))) ? (PC + immB) : // BGEU
                 (microop==`MICROOP_JAL)  ? (PC + immJ) : // JAL
                 (microop==`MICROOP_JALR) ? (opA + immJR) : // JALR
-                PC_Plus_4+8;
-   assign EX_br_taken = (microop==`MICROOP_BNE && (opA != opB)) ?  1'b1 : // BNE
+                PC_Plus_4;
+   assign EX_br_taken = (microop==`MICROOP_BEQ && (opA == opB)) ?  1'b1 : // BEQ
+                (microop==`MICROOP_BNE && (opA != opB)) ?  1'b1 : // BNE
                 (microop==`MICROOP_BLT && ($signed(opA) < $signed(opB))) ? 1'b1 : // BLT
                 (microop==`MICROOP_BGE && ($signed(opA) >= $signed(opB))) ? 1'b1 : // BGE
                 (microop==`MICROOP_BLTU && ($unsigned(opA) < $unsigned(opB))) ? 1'b1 : // BLTU
